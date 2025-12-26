@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>APL Dashboard Report {{ stats.report_no }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* Theme palettes: set a theme-<name> class on .page to switch */
+    :root {
+      --grid-gap: 12px;
+      /* Defaults match the original (midnight) palette */
+      --bg: #020617;
+      --bg-card: #02091e;
+      --body-radial-top: #111827;
+      --page-glow-rgb: 56, 189, 248;
+      --page-bg-glow-top-alpha: 0.22;
+      --page-bg-glow-bottom-rgb: 34, 197, 94;
+      --page-bg-glow-bottom-alpha: 0.18;
+      --page-bg-glow-left-rgb: 129, 140, 248;
+      --page-bg-glow-left-alpha: 0.16;
+      --card-gradient-rgb: 37, 99, 235;
+      --card-glow-rgb: 56, 189, 248;
+      --today-border-rgb: 30, 64, 175;
+      --page-border: #111827;
+      --shadow-rgb: 15, 23, 42;
+      --page-shadow-alpha: 0.9;
+      --page-ring-alpha: 0.9;
+      --card-shadow-alpha: 0.9;
+      --card-inset-alpha: 0.95;
+      --card-base-rgb: 15, 23, 42;
+      --card-base-alpha: 0.96;
+      --page-glow-alpha: 0.22;
+      --page-glow-alpha-2: 0.18;
+      --page-overlay-opacity: 0.85;
+      --card-gradient-alpha: 0.28;
+      --card-glow-alpha: 0.26;
+      --card-overlay-opacity: 0.7;
+      --today-border-alpha: 0.35;
+      --bar-fill-alpha-soft: 0.4;
+      --bar-fill-alpha-strong: 0.9;
+      --bar-shadow-alpha: 0.45;
+      --bar-border-alpha: 0.8;
+      --border-soft: #273548;
+      --text-main: #f3f4f6;
+      --text-soft: #cbd5f5;
+      --header-title-color: #9ca3af;
+      --header-subtitle-color: #e5e7eb;
+      --card-tag-color: #6b7280;
+      --today-row-text: #e5e7eb;
+      --card-title-color: var(--text-soft);
+      --accent: #38bdf8;
+      --accent-soft: #0ea5e9;
+      --accent-rgb: 56, 189, 248; /* fallback */
+      --danger: #f97373;
+      --success: #22c55e;
+      --heatmap-hue: 190;
+      --heatmap-sat: 100%;
+      --heatmap-border-rgb: 15, 23, 42;
+      --heatmap-border-alpha: 0.9;
+      --heatmap-shadow-alpha: 0.9;
+    }
+
+    .theme-midnight {
+      --bg: #020617;
+      --bg-card: #02091e;
+      --body-radial-top: #111827;
+      --page-glow-rgb: 56, 189, 248;
+      --card-gradient-rgb: 37, 99, 235;
+      --card-glow-rgb: 56, 189, 248;
+      --today-border-rgb: 30, 64, 175;
+      --page-border: #111827;
+      --shadow-rgb: 15, 23, 42;
+      --page-shadow-alpha: 0.9;
+      --page-ring-alpha: 0.9;
+      --card-shadow-alpha: 0.9;
+      --card-inset-alpha: 0.95;
+      --card-base-rgb: 15, 23, 42;
+      --card-base-alpha: 0.96;
+      --page-glow-alpha: 0.22;
+      --page-glow-alpha-2: 0.18;
+      --page-overlay-opacity: 0.85;
+      --card-gradient-alpha: 0.28;
+      --card-glow-alpha: 0.26;
+      --card-overlay-opacity: 0.7;
+      --today-border-alpha: 0.35;
+      --bar-fill-alpha-soft: 0.4;
+      --bar-fill-alpha-strong: 0.9;
+      --bar-shadow-alpha: 0.45;
+      --bar-border-alpha: 0.8;
+      --border-soft: #273548;
+      --text-main: #f3f4f6;
+      --text-soft: #cbd5f5;
+      --header-title-color: #9ca3af;
+      --header-subtitle-color: #e5e7eb;
+      --card-tag-color: #6b7280;
+      --today-row-text: #e5e7eb;
+      --accent: #38bdf8;
+      --accent-soft: #0ea5e9;
+      --accent-rgb: 56, 189, 248;
+      --danger: #f97373;
+      --success: #22c55e;
+      --heatmap-hue: 190;
+    }
+
+    .theme-sakura-night {
+      /* Night sakura: deep plum + indigo glow + rose accents */
+      --bg: #07040f;
+      --bg-card: #0d0718;
+      --body-radial-top: #140a24;
+      --page-glow-rgb: 236, 72, 153;
+      --page-bg-glow-top-alpha: 0.16;
+      --page-bg-glow-bottom-rgb: 99, 102, 241;
+      --page-bg-glow-bottom-alpha: 0.14;
+      --page-bg-glow-left-rgb: 244, 114, 182;
+      --page-bg-glow-left-alpha: 0.12;
+      --card-gradient-rgb: 99, 102, 241;
+      --card-glow-rgb: 236, 72, 153;
+      --today-border-rgb: 236, 72, 153;
+      --page-border: #1a102d;
+      --shadow-rgb: 3, 2, 7;
+      --page-shadow-alpha: 0.92;
+      --page-ring-alpha: 0.80;
+      --card-shadow-alpha: 0.86;
+      --card-inset-alpha: 0.92;
+      --card-base-rgb: 7, 4, 15;
+      --card-base-alpha: 0.97;
+      --page-glow-alpha: 0.18;
+      --page-glow-alpha-2: 0.12;
+      --page-overlay-opacity: 0.70;
+      --card-gradient-alpha: 0.22;
+      --card-glow-alpha: 0.16;
+      --card-overlay-opacity: 0.50;
+      --today-border-alpha: 0.36;
+      --bar-fill-alpha-soft: 0.30;
+      --bar-fill-alpha-strong: 0.90;
+      --bar-shadow-alpha: 0.34;
+      --bar-border-alpha: 0.70;
+      --border-soft: #2a1a3d;
+      --text-main: #f5f3ff;
+      --text-soft: #d7c7ff;
+      --header-title-color: #fbcfe8;
+      --header-subtitle-color: #f5f3ff;
+      --card-tag-color: #d7c7ff;
+      --today-row-text: #f5f3ff;
+      --card-title-color: #fbcfe8;
+      --accent: #ec4899;
+      --accent-soft: #6366f1;
+      --accent-rgb: 236, 72, 153;
+      --danger: #fb7185;
+      --success: #22c55e;
+      --heatmap-hue: 330;
+      --heatmap-sat: 85%;
+      --heatmap-border-rgb: 3, 2, 7;
+      --heatmap-border-alpha: 0.92;
+      --heatmap-shadow-alpha: 0.92;
+    }
+
+    .theme-forest-dawn {
+      /* Dark forest: deep pine + emerald glow (reduced amber) */
+      --bg: #07110a;
+      --bg-card: #0b1810;
+      --body-radial-top: #0f2a18;
+      --page-glow-rgb: 34, 197, 94;
+      --page-bg-glow-top-alpha: 0.14;
+      --page-bg-glow-bottom-rgb: 16, 185, 129;
+      --page-bg-glow-bottom-alpha: 0.12;
+      --page-bg-glow-left-rgb: 110, 231, 183;
+      --page-bg-glow-left-alpha: 0.10;
+      --card-gradient-rgb: 34, 197, 94;
+      --card-glow-rgb: 110, 231, 183;
+      --today-border-rgb: 34, 197, 94;
+      --page-border: #0f2a18;
+      --shadow-rgb: 6, 12, 10;
+      --page-shadow-alpha: 0.85;
+      --page-ring-alpha: 0.75;
+      --card-shadow-alpha: 0.80;
+      --card-inset-alpha: 0.88;
+      --card-base-rgb: 6, 16, 10;
+      --card-base-alpha: 0.96;
+      --page-glow-alpha: 0.14;
+      --page-glow-alpha-2: 0.10;
+      --page-overlay-opacity: 0.55;
+      --card-gradient-alpha: 0.20;
+      --card-glow-alpha: 0.14;
+      --card-overlay-opacity: 0.40;
+      --today-border-alpha: 0.30;
+      --bar-fill-alpha-soft: 0.26;
+      --bar-fill-alpha-strong: 0.80;
+      --bar-shadow-alpha: 0.20;
+      --bar-border-alpha: 0.55;
+      --border-soft: #1b3a26;
+      --text-main: #e9ffe9;
+      --text-soft: #a6d6b8;
+      --header-title-color: #a6d6b8;
+      --header-subtitle-color: #e9ffe9;
+      --card-tag-color: #7fb89a;
+      --today-row-text: #e9ffe9;
+      --card-title-color: #a6d6b8;
+      --accent: #22c55e;
+      --accent-soft: #10b981;
+      --accent-rgb: 34, 197, 94;
+      --danger: #fb7185;
+      --success: #22c55e;
+      --heatmap-hue: 135;
+      --heatmap-sat: 85%;
+      --heatmap-border-rgb: 6, 12, 10;
+      --heatmap-border-alpha: 0.85;
+      --heatmap-shadow-alpha: 0.85;
+    }
+
+    .theme-neutral-balanced {
+      /* Neutral: cool gray, medium contrast, not too bright/dark */
+      --bg: #e7ebf0;
+      --bg-card: #f8fafc;
+      --body-radial-top: #d7dee8;
+      --page-glow-rgb: 59, 130, 246;
+      --page-bg-glow-top-alpha: 0.08;
+      --page-bg-glow-bottom-rgb: 148, 163, 184;
+      --page-bg-glow-bottom-alpha: 0.08;
+      --page-bg-glow-left-rgb: 14, 165, 233;
+      --page-bg-glow-left-alpha: 0.06;
+      --card-gradient-rgb: 59, 130, 246;
+      --card-glow-rgb: 14, 165, 233;
+      --today-border-rgb: 59, 130, 246;
+      --page-border: #cbd5e1;
+      --shadow-rgb: 17, 24, 39;
+      --page-shadow-alpha: 0.16;
+      --page-ring-alpha: 0.12;
+      --card-shadow-alpha: 0.14;
+      --card-inset-alpha: 0.10;
+      --card-base-rgb: 248, 250, 252;
+      --card-base-alpha: 0.94;
+      --page-glow-alpha: 0.10;
+      --page-glow-alpha-2: 0.06;
+      --page-overlay-opacity: 0.26;
+      --card-gradient-alpha: 0.10;
+      --card-glow-alpha: 0.08;
+      --card-overlay-opacity: 0.22;
+      --today-border-alpha: 0.20;
+      --bar-fill-alpha-soft: 0.18;
+      --bar-fill-alpha-strong: 0.60;
+      --bar-shadow-alpha: 0.12;
+      --bar-border-alpha: 0.30;
+      --border-soft: #cbd5e1;
+      --text-main: #111827;
+      --text-soft: #374151;
+      --header-title-color: #4b5563;
+      --header-subtitle-color: #111827;
+      --card-tag-color: #475569;
+      --today-row-text: #111827;
+      --card-title-color: #334155;
+      --accent: #3b82f6;
+      --accent-soft: #0ea5e9;
+      --accent-rgb: 59, 130, 246;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --heatmap-hue: 210;
+      --heatmap-sat: 70%;
+      --heatmap-border-rgb: 17, 24, 39;
+      --heatmap-border-alpha: 0.18;
+      --heatmap-shadow-alpha: 0.12;
+    }
+
+    .theme-dark-graphite {
+      /* Dark mode: black/gray base with subtle cool accent */
+      --bg: #0b0c10;
+      --bg-card: #0f1117;
+      --body-radial-top: #141824;
+      --page-glow-rgb: 148, 163, 184;
+      --page-bg-glow-top-alpha: 0.12;
+      --page-bg-glow-bottom-rgb: 96, 165, 250;
+      --page-bg-glow-bottom-alpha: 0.10;
+      --page-bg-glow-left-rgb: 156, 163, 175;
+      --page-bg-glow-left-alpha: 0.08;
+      --card-gradient-rgb: 96, 165, 250;
+      --card-glow-rgb: 148, 163, 184;
+      --today-border-rgb: 156, 163, 175;
+      --page-border: #1f2430;
+      --shadow-rgb: 0, 0, 0;
+      --page-shadow-alpha: 0.96;
+      --page-ring-alpha: 0.88;
+      --card-shadow-alpha: 0.92;
+      --card-inset-alpha: 0.94;
+      --card-base-rgb: 11, 12, 16;
+      --card-base-alpha: 0.98;
+      --page-glow-alpha: 0.12;
+      --page-glow-alpha-2: 0.08;
+      --page-overlay-opacity: 0.70;
+      --card-gradient-alpha: 0.18;
+      --card-glow-alpha: 0.10;
+      --card-overlay-opacity: 0.42;
+      --today-border-alpha: 0.28;
+      --bar-fill-alpha-soft: 0.26;
+      --bar-fill-alpha-strong: 0.86;
+      --bar-shadow-alpha: 0.30;
+      --bar-border-alpha: 0.70;
+      --border-soft: #2a2f3a;
+      --text-main: #f3f4f6;
+      --text-soft: #a1a1aa;
+      --header-title-color: #9ca3af;
+      --header-subtitle-color: #f3f4f6;
+      --card-tag-color: #a1a1aa;
+      --today-row-text: #f3f4f6;
+      --card-title-color: #d1d5db;
+      --accent: #60a5fa;
+      --accent-soft: #94a3b8;
+      --accent-rgb: 96, 165, 250;
+      --danger: #fb7185;
+      --success: #22c55e;
+      --heatmap-hue: 210;
+      --heatmap-sat: 60%;
+      --heatmap-border-rgb: 0, 0, 0;
+      --heatmap-border-alpha: 0.92;
+      --heatmap-shadow-alpha: 0.92;
+    }
+
+    .theme-solar-slate {
+      /* Dark solar slate: soot + brass + ember */
+      --bg: #130c08;
+      --bg-card: #1a120d;
+      --body-radial-top: #2a1a10;
+      --page-glow-rgb: 202, 138, 4;
+      --page-bg-glow-top-alpha: 0.14;
+      --page-bg-glow-bottom-rgb: 234, 88, 12;
+      --page-bg-glow-bottom-alpha: 0.12;
+      --page-bg-glow-left-rgb: 220, 38, 38;
+      --page-bg-glow-left-alpha: 0.10;
+      --card-gradient-rgb: 234, 88, 12;
+      --card-glow-rgb: 202, 138, 4;
+      --today-border-rgb: 202, 138, 4;
+      --page-border: #2a1a10;
+      --shadow-rgb: 19, 12, 8;
+      --page-shadow-alpha: 0.85;
+      --page-ring-alpha: 0.75;
+      --card-shadow-alpha: 0.80;
+      --card-inset-alpha: 0.88;
+      --card-base-rgb: 19, 12, 8;
+      --card-base-alpha: 0.96;
+      --page-glow-alpha: 0.14;
+      --page-glow-alpha-2: 0.10;
+      --page-overlay-opacity: 0.55;
+      --card-gradient-alpha: 0.20;
+      --card-glow-alpha: 0.14;
+      --card-overlay-opacity: 0.40;
+      --today-border-alpha: 0.30;
+      --bar-fill-alpha-soft: 0.26;
+      --bar-fill-alpha-strong: 0.80;
+      --bar-shadow-alpha: 0.20;
+      --bar-border-alpha: 0.55;
+      --border-soft: #3b2416;
+      --text-main: #fff2e6;
+      --text-soft: #e6c1a6;
+      --header-title-color: #e6c1a6;
+      --header-subtitle-color: #fff2e6;
+      --card-tag-color: #c59b7a;
+      --today-row-text: #fff2e6;
+      --card-title-color: #e6c1a6;
+      --accent: #ca8a04;
+      --accent-soft: #ea580c;
+      --accent-rgb: 202, 138, 4;
+      --danger: #f87171;
+      --success: #22c55e;
+      --heatmap-hue: 28;
+      --heatmap-sat: 85%;
+      --heatmap-border-rgb: 19, 12, 8;
+      --heatmap-border-alpha: 0.85;
+      --heatmap-shadow-alpha: 0.85;
+    }
+
+    /* New: high-contrast neon, but kept controlled (less bloom) */
+    .theme-neon-arcade {
+      /* True neon: pitch black + cyan + magenta, hard contrast */
+      --bg: #05010a;
+      --bg-card: #090114;
+      --body-radial-top: #12001f;
+      --page-glow-rgb: 0, 255, 242;
+      --page-bg-glow-top-alpha: 0.18;
+      --page-bg-glow-bottom-rgb: 255, 0, 230;
+      --page-bg-glow-bottom-alpha: 0.16;
+      --page-bg-glow-left-rgb: 190, 255, 0;
+      --page-bg-glow-left-alpha: 0.12;
+      --card-gradient-rgb: 255, 0, 230;
+      --card-glow-rgb: 0, 255, 242;
+      --today-border-rgb: 0, 255, 242;
+      --page-border: #2a0142;
+      --shadow-rgb: 5, 1, 10;
+      --page-shadow-alpha: 0.95;
+      --page-ring-alpha: 0.85;
+      --card-shadow-alpha: 0.90;
+      --card-inset-alpha: 0.92;
+      --card-base-rgb: 5, 1, 10;
+      --card-base-alpha: 0.98;
+      --page-glow-alpha: 0.18;
+      --page-glow-alpha-2: 0.12;
+      --page-overlay-opacity: 0.70;
+      --card-gradient-alpha: 0.26;
+      --card-glow-alpha: 0.18;
+      --card-overlay-opacity: 0.52;
+      --today-border-alpha: 0.40;
+      --bar-fill-alpha-soft: 0.30;
+      --bar-fill-alpha-strong: 0.92;
+      --bar-shadow-alpha: 0.28;
+      --bar-border-alpha: 0.70;
+      --border-soft: #2a0142;
+      --text-main: #f7fffe;
+      --text-soft: #7cf7ff;
+      --header-title-color: #7cf7ff;
+      --header-subtitle-color: #f7fffe;
+      --card-tag-color: #7cf7ff;
+      --today-row-text: #f7fffe;
+      --card-title-color: #7cf7ff;
+      --accent: #00fff2;
+      --accent-soft: #ff00e6;
+      --accent-rgb: 0, 255, 242;
+      --danger: #ff3d7a;
+      --success: #beff00;
+      --heatmap-hue: 185;
+      --heatmap-sat: 100%;
+      --heatmap-border-rgb: 5, 1, 10;
+      --heatmap-border-alpha: 0.95;
+      --heatmap-shadow-alpha: 0.95;
+    }
+
+    /* New: bright / light theme (separate identity) */
+    .theme-bright-daylight {
+      --bg: #fff7e6;
+      --bg-card: #ffffff;
+      --body-radial-top: #ffe3b3;
+      --page-glow-rgb: 255, 97, 56;
+      --page-bg-glow-top-alpha: 0.10;
+      --page-bg-glow-bottom-rgb: 34, 197, 94;
+      --page-bg-glow-bottom-alpha: 0.10;
+      --page-bg-glow-left-rgb: 236, 72, 153;
+      --page-bg-glow-left-alpha: 0.08;
+      --card-gradient-rgb: 255, 205, 86;
+      --card-glow-rgb: 255, 97, 56;
+      --today-border-rgb: 255, 97, 56;
+      --page-border: #f1d4a8;
+      --shadow-rgb: 17, 24, 39;
+      --page-shadow-alpha: 0.18;
+      --page-ring-alpha: 0.12;
+      --card-shadow-alpha: 0.16;
+      --card-inset-alpha: 0.10;
+      --card-base-rgb: 255, 255, 255;
+      --card-base-alpha: 0.96;
+      --page-glow-alpha: 0.10;
+      --page-glow-alpha-2: 0.06;
+      --page-overlay-opacity: 0.38;
+      --card-gradient-alpha: 0.12;
+      --card-glow-alpha: 0.08;
+      --card-overlay-opacity: 0.28;
+      --today-border-alpha: 0.22;
+      --bar-fill-alpha-soft: 0.18;
+      --bar-fill-alpha-strong: 0.65;
+      --bar-shadow-alpha: 0.14;
+      --bar-border-alpha: 0.35;
+      --border-soft: #f1d4a8;
+      --text-main: #111827;
+      --text-soft: #6b4e2e;
+      --header-title-color: #7c4a12;
+      --header-subtitle-color: #111827;
+      --card-tag-color: #6b4e2e;
+      --today-row-text: #111827;
+      --card-title-color: #6b4e2e;
+      --accent: #ff6138;
+      --accent-soft: #22c55e;
+      --accent-rgb: 255, 97, 56;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --heatmap-hue: 28;
+      --heatmap-sat: 85%;
+      --heatmap-border-rgb: 17, 24, 39;
+      --heatmap-border-alpha: 0.18;
+      --heatmap-shadow-alpha: 0.12;
+    }
+
+    /* New: clean light theme with cool mint + violet */
+    .theme-bright-mint {
+      --bg: #effffb;
+      --bg-card: #ffffff;
+      --body-radial-top: #ccfff0;
+      --page-glow-rgb: 13, 148, 136;
+      --page-bg-glow-top-alpha: 0.10;
+      --page-bg-glow-bottom-rgb: 244, 63, 94;
+      --page-bg-glow-bottom-alpha: 0.10;
+      --page-bg-glow-left-rgb: 126, 34, 206;
+      --page-bg-glow-left-alpha: 0.08;
+      --card-gradient-rgb: 126, 34, 206;
+      --card-glow-rgb: 13, 148, 136;
+      --today-border-rgb: 13, 148, 136;
+      --page-border: #b9f3e4;
+      --shadow-rgb: 17, 24, 39;
+      --page-shadow-alpha: 0.18;
+      --page-ring-alpha: 0.12;
+      --card-shadow-alpha: 0.16;
+      --card-inset-alpha: 0.10;
+      --card-base-rgb: 255, 255, 255;
+      --card-base-alpha: 0.98;
+      --page-glow-alpha: 0.10;
+      --page-glow-alpha-2: 0.06;
+      --page-overlay-opacity: 0.32;
+      --card-gradient-alpha: 0.12;
+      --card-glow-alpha: 0.08;
+      --card-overlay-opacity: 0.26;
+      --today-border-alpha: 0.22;
+      --bar-fill-alpha-soft: 0.18;
+      --bar-fill-alpha-strong: 0.60;
+      --bar-shadow-alpha: 0.12;
+      --bar-border-alpha: 0.34;
+      --border-soft: #b9f3e4;
+      --text-main: #111827;
+      --text-soft: #0f4b47;
+      --header-title-color: #0f4b47;
+      --header-subtitle-color: #111827;
+      --card-tag-color: #0f4b47;
+      --today-row-text: #111827;
+      --card-title-color: #0f4b47;
+      --accent: #0d9488;
+      --accent-soft: #7e22ce;
+      --accent-rgb: 13, 148, 136;
+      --danger: #b91c1c;
+      --success: #166534;
+      --heatmap-hue: 170;
+      --heatmap-sat: 85%;
+      --heatmap-border-rgb: 17, 24, 39;
+      --heatmap-border-alpha: 0.18;
+      --heatmap-shadow-alpha: 0.12;
+    }
+
+    /* New: light theme with iris ink + sunny chart warmth */
+    .theme-bright-iris {
+      --bg: #f7f4ff;
+      --bg-card: #ffffff;
+      --body-radial-top: #e6dcff;
+      --page-glow-rgb: 109, 40, 217;
+      --page-bg-glow-top-alpha: 0.10;
+      --page-bg-glow-bottom-rgb: 250, 204, 21;
+      --page-bg-glow-bottom-alpha: 0.10;
+      --page-bg-glow-left-rgb: 244, 114, 182;
+      --page-bg-glow-left-alpha: 0.08;
+      --card-gradient-rgb: 250, 204, 21;
+      --card-glow-rgb: 109, 40, 217;
+      --today-border-rgb: 109, 40, 217;
+      --page-border: #d8ccff;
+      --shadow-rgb: 17, 24, 39;
+      --page-shadow-alpha: 0.18;
+      --page-ring-alpha: 0.12;
+      --card-shadow-alpha: 0.16;
+      --card-inset-alpha: 0.10;
+      --card-base-rgb: 255, 255, 255;
+      --card-base-alpha: 0.98;
+      --page-glow-alpha: 0.10;
+      --page-glow-alpha-2: 0.06;
+      --page-overlay-opacity: 0.32;
+      --card-gradient-alpha: 0.12;
+      --card-glow-alpha: 0.08;
+      --card-overlay-opacity: 0.26;
+      --today-border-alpha: 0.22;
+      --bar-fill-alpha-soft: 0.18;
+      --bar-fill-alpha-strong: 0.60;
+      --bar-shadow-alpha: 0.12;
+      --bar-border-alpha: 0.34;
+      --border-soft: #d8ccff;
+      --text-main: #111827;
+      --text-soft: #3f2b7b;
+      --header-title-color: #3f2b7b;
+      --header-subtitle-color: #111827;
+      --card-tag-color: #3f2b7b;
+      --today-row-text: #111827;
+      --card-title-color: #3f2b7b;
+      --accent: #6d28d9;
+      --accent-soft: #facc15;
+      --accent-rgb: 109, 40, 217;
+      --danger: #b91c1c;
+      --success: #166534;
+      --heatmap-hue: 270;
+      --heatmap-sat: 85%;
+      --heatmap-border-rgb: 17, 24, 39;
+      --heatmap-border-alpha: 0.18;
+      --heatmap-shadow-alpha: 0.12;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: radial-gradient(circle at top, var(--body-radial-top) 0, var(--bg) 55%, var(--bg) 100%);
+      color: var(--text-main);
+      font-family: "Noto Sans JP", "Yu Gothic UI", "Yu Gothic", "Meiryo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Compact one-page preview mode (design sample opts in via stats.one_page). */
+    .layout-one-page { padding: 16px; }
+    .layout-one-page .page { min-height: 1100px; padding: 18px 18px 22px; border-radius: 20px; }
+    .layout-one-page .page-inner { gap: 12px; }
+    .layout-one-page .subtitle { font-size: 28px; }
+    .layout-one-page .header-right { font-size: 11px; }
+    .layout-one-page .grid { gap: 10px; margin-top: 6px; }
+    .layout-one-page .card { padding: 12px 12px 10px; border-radius: 16px; }
+    .layout-one-page .value-large { font-size: 28px; }
+    .layout-one-page .value-medium { font-size: 22px; }
+    .layout-one-page .today-main { font-size: 24px; }
+    .layout-one-page .chart-bars { height: 100px; gap: 8px; }
+    .layout-one-page .heatmap-cell { width: 14px; height: 14px; border-radius: 5px; }
+
+    .page {
+      width: 800px;
+      min-height: 1310px;
+      background: radial-gradient(circle at top, rgba(var(--page-glow-rgb), var(--page-bg-glow-top-alpha)), transparent 55%),
+                  radial-gradient(circle at bottom, rgba(var(--page-bg-glow-bottom-rgb), var(--page-bg-glow-bottom-alpha)), transparent 45%),
+                  radial-gradient(circle at left, rgba(var(--page-bg-glow-left-rgb), var(--page-bg-glow-left-alpha)), transparent 40%),
+                  var(--bg);
+      border-radius: 24px;
+      padding: 24px 24px 32px;
+      border: 1px solid var(--page-border);
+      box-shadow:
+        0 40px 120px rgba(var(--shadow-rgb), var(--page-shadow-alpha)),
+        0 0 0 1px rgba(var(--shadow-rgb), var(--page-ring-alpha));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(var(--page-glow-rgb), var(--page-glow-alpha)), transparent 55%),
+        radial-gradient(circle at 100% 0%, rgba(var(--page-glow-rgb), var(--page-glow-alpha-2)), transparent 45%),
+        radial-gradient(circle at 50% 100%, rgba(var(--page-bg-glow-bottom-rgb), 0.22), transparent 40%);
+      opacity: var(--page-overlay-opacity);
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+
+    .page-inner {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .title {
+      font-size: 20px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--header-title-color);
+    }
+
+    .subtitle {
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--header-subtitle-color);
+    }
+
+    .badge-row {
+      display: flex;
+      justify-content: flex-start;
+      gap: 8px;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .badge {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0);
+      border: 1px solid var(--border-soft);
+      box-shadow: 0 0 0 0.5px rgba(15, 23, 42, 0);
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+      color: var(--text-soft);
+    }
+
+    .header-right {
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2.1fr 1.9fr;
+      grid-auto-rows: minmax(0, auto);
+      grid-template-rows: auto auto auto auto 1fr;
+      gap: var(--grid-gap);
+      flex: 1;
+      margin-top: 8px;
+    }
+
+    .card {
+      position: relative;
+      background: radial-gradient(circle at top, rgba(var(--card-gradient-rgb), var(--card-gradient-alpha)), rgba(var(--card-base-rgb), var(--card-base-alpha)));
+      border-radius: 18px;
+      padding: 14px 14px 12px;
+      border: 1px solid var(--border-soft);
+      box-shadow:
+        0 18px 40px rgba(var(--shadow-rgb), var(--card-shadow-alpha)),
+        inset 0 0 0 0.5px rgba(var(--shadow-rgb), var(--card-inset-alpha));
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(var(--card-glow-rgb), var(--card-glow-alpha)), transparent 55%);
+      opacity: var(--card-overlay-opacity);
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+
+    .card-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--card-title-color, var(--text-soft));
+    }
+
+    .card-tag {
+      font-size: 11px;
+      color: var(--card-tag-color);
+    }
+
+    .value-large {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 2px;
+    }
+
+    .value-large span.unit {
+      font-size: 14px;
+      color: var(--text-soft);
+    }
+
+    .value-medium {
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .muted {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .delta {
+      font-size: 11px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(55, 65, 81, 0);
+      background: rgba(15, 23, 42, 0);
+    }
+
+    .delta.up { color: var(--success); }
+    .delta.down { color: var(--danger); }
+
+    .delta .chevron {
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .h-separator {
+      height: 1px;
+      margin: 6px 0 4px;
+      background: linear-gradient(to right, rgba(75, 85, 99, 0.5), rgba(55, 65, 81, 0.5));
+    }
+
+    .split-row {
+      display: grid;
+      grid-template-columns: 1.2fr 1.2fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .split-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-soft);
+      margin-bottom: 2px;
+    }
+
+    .split-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .split-subtext {
+      font-size: 11px;
+      color: var(--text-soft);
+      margin-top: 1px;
+    }
+
+    /* Layout mapping for cards */
+    .card-total-immersion { grid-column: 1 / 2; grid-row: 1 / 2; }
+    .card-known { grid-column: 2 / 3; grid-row: 1 / 2; }
+    .card-today { grid-column: 1 / 2; grid-row: 2 / 4; }
+    .card-average { grid-column: 2 / 3; grid-row: 2 / 3; }
+    .card-retention { grid-column: 2 / 3; grid-row: 3 / 4; }
+    .card-reading { grid-column: 1 / 3; grid-row: 4 / 5; }
+    .card-heatmap { grid-column: 1 / 3; grid-row: 5 / 6; }
+
+    /* Today's immersion breakdown */
+    .today-summary {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .today-main {
+      font-size: 26px;
+      font-weight: 600;
+    }
+
+    .today-main span.unit {
+      font-size: 13px;
+      color: var(--text-soft);
+      margin-left: 4px;
+    }
+
+    .today-avg {
+      font-size: 11px;
+      color: var(--text-soft);
+      text-align: right;
+    }
+
+    .today-breakdown {
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px dashed rgba(55, 65, 81, 0.8);
+      font-size: 13px;
+    }
+
+    .today-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(var(--today-border-rgb), var(--today-border-alpha));
+    }
+
+    .today-row:last-of-type {
+      border-bottom: none;
+    }
+
+    .today-desc {
+      color: var(--today-row-text);
+      max-width: 70%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .today-time {
+      font-feature-settings: "tnum" 1;
+      font-variant-numeric: tabular-nums;
+      color: var(--today-row-text);
+      font-size: 13px;
+    }
+
+    .today-more {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--text-soft);
+      text-align: right;
+    }
+
+    /* Chart */
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .chart-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-soft);
+    }
+
+    .chart-legend {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      margin-top: 8px;
+      height: 120px;
+    }
+
+    .chart-bar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+
+    .chart-bar-rect {
+      width: 100%;
+      border-radius: 999px 999px 6px 6px;
+      background: linear-gradient(to top, rgba(var(--accent-rgb), var(--bar-fill-alpha-soft)), rgba(var(--accent-rgb), var(--bar-fill-alpha-strong)));
+      box-shadow: 0 6px 18px rgba(var(--accent-rgb), var(--bar-shadow-alpha));
+      border: 1px solid rgba(var(--accent-rgb), var(--bar-border-alpha));
+    }
+
+    .chart-bar-label {
+      font-size: 10px;
+      color: var(--text-soft);
+    }
+
+    .chart-bar-value {
+      font-size: 11px;
+      color: var(--text-main);
+      font-feature-settings: "tnum" 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Heatmap */
+    .heatmap-body {
+      margin-top: 6px;
+    }
+
+    .heatmap-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .heatmap-cells {
+      display: flex;
+      gap: 4px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+
+    .heatmap-cell {
+      width: 16px;
+      height: 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(var(--heatmap-border-rgb), var(--heatmap-border-alpha));
+      box-shadow: 0 0 0 0.5px rgba(var(--heatmap-border-rgb), var(--heatmap-shadow-alpha));
+    }
+
+    .heatmap-legend {
+      display: none;
+    }
+</style>
+</head>
+<body class="theme-{{ stats.theme|default('midnight') }}{{ ' layout-one-page' if (stats.one_page|default(false)) else '' }}">
+  <div class="page">
+    <div class="page-inner">
+      <header class="header">
+        <div class="header-left">
+          <div class="subtitle">Immersion Dashboard Report</div>
+          <div class="badge-row">
+            <div class="badge">Report #{{ stats.report_no }}</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div>{{ stats.generated_label }}</div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <!-- Row 1: Total Immersion -->
+        <section class="card card-total-immersion">
+          <div class="card-inner">
+            <header class="card-header">
+              <div class="card-title">Total Immersion Time</div>
+              <div class="card-tag">Lifetime</div>
+            </header>
+            <div class="value-large">
+              <span>{{ '%.1f' % stats.total_immersion_hours }}</span>
+              <span class="unit">hours</span>
+            </div>
+            <div class="muted">Across all tracked sources</div>
+
+            <div class="h-separator"></div>
+
+            <div class="muted">
+              <span>Change since last report:</span>
+              {% set d = stats.total_immersion_delta_hours %}
+              {% if d == 0 %}
+                <span class="delta">—</span>
+              {% else %}
+                <span class="delta {{ 'up' if d >= 0 else 'down' }}">
+                  <span class="chevron">{{ '▲' if d >= 0 else '▼' }}</span>
+                  {{ '%.2f' % d }}h
+                </span>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+
+        <!-- Row 1: Known Words / Inflections -->
+        <section class="card card-known">
+          <div class="card-inner">
+            <header class="card-header">
+              <div class="card-title">Lexical Progress</div>
+              <div class="card-tag">Anki</div>
+            </header>
+
+            <div class="split-row">
+              <div>
+                <div class="split-label">Known Words</div>
+                <div class="split-value">{{ stats.known_words | format_k }}</div>
+                <div class="split-subtext">
+                  {% set d = stats.known_words_delta %}
+                  {% if d == 0 %}
+                    <span class="delta">—</span>
+                  {% else %}
+                    <span class="delta {{ 'up' if d >= 0 else 'down' }}">
+                      <span class="chevron">{{ '▲' if d >= 0 else '▼' }}</span>
+                      {{ d }}
+                    </span>
+                  {% endif %}
+                  <span class="muted">since last report</span>
+                </div>
+              </div>
+
+              <div>
+                <div class="split-label">Known Inflections</div>
+                <div class="split-value">{{ stats.known_inflections | format_k }}</div>
+                <div class="split-subtext">
+                  {% set d2 = stats.known_inflections_delta %}
+                  {% if d2 == 0 %}
+                    <span class="delta">—</span>
+                  {% else %}
+                    <span class="delta {{ 'up' if d2 >= 0 else 'down' }}">
+                      <span class="chevron">{{ '▲' if d2 >= 0 else '▼' }}</span>
+                      {{ d2 }}
+                    </span>
+                  {% endif %}
+                  <span class="muted">since last report</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Rows 2–3: Today's Immersion -->
+        <section class="card card-today">
+          <div class="card-inner">
+            <header class="card-header">
+              <div class="card-title">Today's Immersion</div>
+            </header>
+
+            <div class="today-summary">
+              <div class="today-main">
+                {{ stats.today_immersion.total_hms }}
+                <span class="unit">total</span>
+              </div>
+            </div>
+
+            <div class="today-breakdown">
+              {% set entries = stats.today_immersion.entries %}
+              {% set visible = entries[:6] %}
+              {% for e in visible %}
+                <div class="today-row">
+                  <div class="today-desc">{{ e.desc }}</div>
+                  <div class="today-time">{{ format_hms(e.seconds) }}</div>
+                </div>
+              {% endfor %}
+
+              {% if entries|length > 6 %}
+                <div class="today-more">
+                  + {{ entries|length - 6 }} more…
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+
+        <!-- Row 2: Average Immersion -->
+        <section class="card card-average">
+          <div class="card-inner">
+            <header class="card-header">
+              <div class="card-title">Average Immersion Time</div>
+              <div class="card-tag">Last 7 days</div>
+            </header>
+
+            <div class="value-large">
+              <span>{{ stats.avg_immersion_hms }}</span>
+            </div>
+
+            <div class="h-separator"></div>
+
+            <div class="muted">
+              <span>Change since last report:</span>
+              {% set d = stats.avg_immersion_delta_hms %}
+              {% if stats.avg_immersion_delta_seconds == 0 %}
+                <span class="delta">—</span>
+              {% else %}
+                <span class="delta {{ 'up' if stats.avg_immersion_delta_seconds >= 0 else 'down' }}">
+                  <span class="chevron">{{ '▲' if stats.avg_immersion_delta_seconds >= 0 else '▼' }}</span>
+                  {{ d }}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+
+        <!-- Row 3: Retention / Reviews -->
+        <section class="card card-retention">
+          <div class="card-inner">
+            <header class="card-header">
+              <div class="card-title">Review Quality & Volume</div>
+              <div class="card-tag">Anki</div>
+            </header>
+
+            <div class="split-row">
+              <div>
+                <div class="split-label">Retention Rate</div>
+                <div class="split-value">{{ '%.2f' % stats.retention_rate }}%</div>
+                <div class="split-subtext">
+                  {% set d = stats.retention_delta %}
+                  {% if d == 0 %}
+                    <span class="delta">—</span>
+                  {% else %}
+                    <span class="delta {{ 'up' if d >= 0 else 'down' }}">
+                      <span class="chevron">{{ '▲' if d >= 0 else '▼' }}</span>
+                      {{ '%.2f' % d }}%
+                    </span>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div>
+                <div class="split-label">Total Reviews</div>
+                <div class="split-value">{{ stats.total_reviews | format_k }}</div>
+                <div class="split-subtext">
+                  {% set d2 = stats.total_reviews_delta %}
+                  {% if d2 == 0 %}
+                    <span class="delta">—</span>
+                  {% else %}
+                    <span class="delta {{ 'up' if d2 >= 0 else 'down' }}">
+                      <span class="chevron">{{ '▲' if d2 >= 0 else '▼' }}</span>
+                      {{ d2 }}
+                    </span>
+                  {% endif %}
+                  <span class="muted">since last report</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Row 4: Reading (Manga + GSM) -->
+        <section class="card card-reading">
+          <div class="card-inner">
+            <header class="card-header">
+              <div class="card-title">Reading</div>
+              <div class="card-tag">Manga + GSM</div>
+            </header>
+
+            <div class="value-medium">
+              {{ (stats.manga_chars_total + stats.gsm_chars_total) | format_chars }}
+            </div>
+            <div class="muted">Total characters read across manga and games</div>
+
+            <div class="h-separator"></div>
+
+            <div class="split-row">
+              <div>
+                <div class="split-label">Manga Characters</div>
+                <div class="split-value">{{ stats.manga_chars_total | format_chars }}</div>
+                <div class="split-subtext">
+                  {% set d = stats.manga_chars_delta %}
+                  {% if d == 0 %}
+                    <span class="delta">—</span>
+                  {% else %}
+                    <span class="delta {{ 'up' if d >= 0 else 'down' }}">
+                      <span class="chevron">{{ '▲' if d >= 0 else '▼' }}</span>
+                      {{ d | format_k }}
+                    </span>
+                  {% endif %}
+                  <span class="muted">since last report</span>
+                </div>
+              </div>
+
+              <div>
+                <div class="split-label">Game Characters</div>
+                <div class="split-value">{{ stats.gsm_chars_total | format_chars }}</div>
+                <div class="split-subtext">
+                  {% set d2 = stats.gsm_chars_delta %}
+                  {% if d2 == 0 %}
+                    <span class="delta">—</span>
+                  {% else %}
+                    <span class="delta {{ 'up' if d2 >= 0 else 'down' }}">
+                      <span class="chevron">{{ '▲' if d2 >= 0 else '▼' }}</span>
+                      {{ d2 | format_k }}
+                    </span>
+                  {% endif %}
+                  <span class="muted">since last report</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bottom: Recent Immersion Heatmap -->
+        <section class="card card-heatmap">
+          <div class="card-inner">
+            <header class="chart-header">
+              <div class="chart-title">Recent Immersion Heatmap</div>
+              <div class="card-tag">Darker = more hours today</div>
+            </header>
+
+            <div class="heatmap-body">
+              {% set max_hours = (stats.immersion_log | map(attribute='hours') | max) if stats.immersion_log else 1 %}
+
+              <div class="heatmap-row">
+                <div class="heatmap-cells">
+                  {% for d in stats.immersion_log %}
+                    {% set base_ratio = (d.hours / max_hours) if max_hours > 0 else 0 %}
+                    {% if d.hours <= 0 %}
+                      {% set ratio = 0 %}
+                    {% else %}
+                      {% set ratio = 0.25 + 0.75 * base_ratio %}
+                    {% endif %}
+                    {% set lightness = 16 + 42 * ratio %}
+                    <div
+                      class="heatmap-cell"
+                      style="{% if d.hours <= 0 %}background: transparent; opacity: 1;{% else %}background: hsl(var(--heatmap-hue), var(--heatmap-sat), {{ lightness }}%); opacity: {{ 0.25 + 0.6 * ratio }};{% endif %}"
+                      title="{{ d.label }} · {{ '%.1f' % d.hours }}h"
+                    ></div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <!-- Legend row intentionally removed; tag above explains scale -->
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

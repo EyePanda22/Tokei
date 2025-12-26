@@ -38,7 +38,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--anki-profile")
     parser.add_argument("--timezone")
     parser.add_argument("--theme")
-    parser.add_argument("--output-dir", help="Output directory for HTML/PNG (relative to repo root or absolute).")
+    parser.add_argument(
+        "--output-dir",
+        help="Output directory for HTML/PNG (relative to Tokei folder or absolute).",
+    )
     parser.add_argument("--start-date")
     parser.add_argument("--baseline-hms", help="Baseline lifetime time as HH:MM:SS (hours may exceed 24).")
     parser.add_argument("--baseline-hours", type=float)

@@ -1,0 +1,9 @@
+{
+  "name": "tokei",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "puppeteer": "^24.34.0"
+  }
+}

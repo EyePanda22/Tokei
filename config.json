@@ -2,7 +2,7 @@
   "anki_profile": "User 1",
   "timezone": "local",
   "theme": "dark-graphite",
-  "output_dir": "Tokei\\\\output",
+  "output_dir": "output",
   "one_page": true,
   "hashi": {
     "host": "127.0.0.1",

@@ -11,7 +11,7 @@ def _default_config() -> dict:
         "anki_profile": "User 1",
         "timezone": "local",
         "theme": "midnight",
-        "output_dir": r"Tokei\output",
+        "output_dir": "output",
         "one_page": True,
         "hashi": {
             "host": "127.0.0.1",

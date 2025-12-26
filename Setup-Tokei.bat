@@ -1,26 +1,36 @@
 @echo off
 setlocal EnableExtensions
 
-REM Run from repo root so relative paths work.
-cd /d "%~dp0\.."
+cd /d "%~dp0"
+
+set "PY_EXE="
+if exist ".venv\Scripts\python.exe" set "PY_EXE=.venv\Scripts\python.exe"
+if "%PY_EXE%"=="" set "PY_EXE=python"
+%PY_EXE% -c "import sys" >nul 2>&1
+if errorlevel 1 (
+  echo.
+  echo Python was not found. Run Setup-Environment.bat first.
+  call :MAYBE_PAUSE
+  exit /b 1
+)
 
 echo.
 echo === Tokei Setup ===
 echo.
-echo This will update: Tokei\config.json
+echo This will update: config.json
 echo.
 
 REM Read existing config as defaults so Enter keeps your current settings.
 set "DEFAULT_TIMEZONE=local"
 set "DEFAULT_THEME=midnight"
-set "DEFAULT_OUTPUT_DIR=Tokei\output"
+set "DEFAULT_OUTPUT_DIR=output"
 set "DEFAULT_ANKI_PROFILE=User 1"
 set "DEFAULT_BASELINE_HMS=0:00:00"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'Tokei\\config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.timezone }"`) do if not "%%i"=="" set "DEFAULT_TIMEZONE=%%i"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'Tokei\\config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.theme }"`) do if not "%%i"=="" set "DEFAULT_THEME=%%i"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'Tokei\\config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.output_dir }"`) do if not "%%i"=="" set "DEFAULT_OUTPUT_DIR=%%i"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'Tokei\\config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.anki_profile }"`) do if not "%%i"=="" set "DEFAULT_ANKI_PROFILE=%%i"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'Tokei\\config.json' | ConvertFrom-Json } catch { $c=$null }; $h=0; if($c -and $c.toggl -and $c.toggl.baseline_hours -ne $null){ $h=[double]$c.toggl.baseline_hours }; $s=[int][math]::Round($h*3600); $hh=[int]([math]::Floor($s/3600)); $mm=[int]([math]::Floor(($s%%3600)/60)); $ss=[int]($s%%60); \"{0}:{1:D2}:{2:D2}\" -f $hh,$mm,$ss"`) do if not "%%i"=="" set "DEFAULT_BASELINE_HMS=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.timezone }"`) do if not "%%i"=="" set "DEFAULT_TIMEZONE=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.theme }"`) do if not "%%i"=="" set "DEFAULT_THEME=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.output_dir }"`) do if not "%%i"=="" set "DEFAULT_OUTPUT_DIR=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'config.json' | ConvertFrom-Json } catch { $c=$null }; if($c){ $c.anki_profile }"`) do if not "%%i"=="" set "DEFAULT_ANKI_PROFILE=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $c=Get-Content -Raw 'config.json' | ConvertFrom-Json } catch { $c=$null }; $h=0; if($c -and $c.toggl -and $c.toggl.baseline_hours -ne $null){ $h=[double]$c.toggl.baseline_hours }; $s=[int][math]::Round($h*3600); $hh=[int]([math]::Floor($s/3600)); $mm=[int]([math]::Floor(($s%%3600)/60)); $ss=[int]($s%%60); \"{0}:{1:D2}:{2:D2}\" -f $hh,$mm,$ss"`) do if not "%%i"=="" set "DEFAULT_BASELINE_HMS=%%i"
 
 echo Step 1: Toggl API token (optional but required for hours)
 echo.
@@ -28,25 +38,25 @@ echo How to find your Toggl API token:
 echo  - Toggl ^> Profile ^> Profile settings
 echo  - Scroll to the very bottom to reveal your API token
 echo.
-echo If you enter it here, it will be saved to: Tokei\toggl-token.txt (plain text)
+echo If you enter it here, it will be saved to: toggl-token.txt (plain text)
 echo You can also set it via the TOGGL_API_TOKEN environment variable instead.
 echo.
 set "TOGGL_TOKEN="
-if exist "Tokei\toggl-token.txt" (
-  set /p TOGGL_TOKEN=Enter Toggl API token (press Enter to keep existing) ^> 
+if exist "toggl-token.txt" (
+  set /p TOGGL_TOKEN=Enter Toggl API token ^(press Enter to keep existing^) ^> 
 ) else (
-  set /p TOGGL_TOKEN=Enter Toggl API token (press Enter to skip) ^> 
+  set /p TOGGL_TOKEN=Enter Toggl API token ^(press Enter to skip^) ^> 
 )
 if "%TOGGL_TOKEN%"=="" (
-  if exist "Tokei\toggl-token.txt" goto :AFTER_TOGGL_TOKEN
+  if exist "toggl-token.txt" goto :AFTER_TOGGL_TOKEN
   goto :NO_TOGGL_TOKEN
 )
 
 call :SAVE_TOGGL_TOKEN "%TOGGL_TOKEN%"
 if errorlevel 1 (
   echo.
-  echo Failed to write Tokei\toggl-token.txt
-  pause
+  echo Failed to write toggl-token.txt
+  call :MAYBE_PAUSE
   exit /b 1
 )
 goto :AFTER_TOGGL_TOKEN
@@ -59,7 +69,7 @@ if /i not "%CONTINUE_NO_TOKEN%"=="y" if /i not "%CONTINUE_NO_TOKEN%"=="yes" (
   echo.
   echo Cancelled.
   echo.
-  pause
+  call :MAYBE_PAUSE
   exit /b 0
 )
 
@@ -106,7 +116,7 @@ echo   bright-daylight
 echo   bright-mint
 echo   bright-iris
 echo.
-echo To preview themes, open the sample HTMLs in: design\output\
+echo To preview themes, open the sample PNGs in: samples\
 echo.
 set "THEME="
 set /p THEME=Theme (press Enter to keep: %DEFAULT_THEME%) ^> 
@@ -122,23 +132,28 @@ set "ANKI_PROFILE="
 set /p ANKI_PROFILE=Anki profile name (press Enter to keep: %DEFAULT_ANKI_PROFILE%) ^> 
 if "%ANKI_PROFILE%"=="" set "ANKI_PROFILE=%DEFAULT_ANKI_PROFILE%"
 
-python Tokei\tools\tokei_configure.py --config Tokei\config.json --baseline-hms "%BASELINE_HMS%" --timezone "%TIMEZONE%" --theme "%THEME%" --output-dir "%OUTPUT_DIR%" --anki-profile "%ANKI_PROFILE%"
+%PY_EXE% tools\tokei_configure.py --config config.json --baseline-hms "%BASELINE_HMS%" --timezone "%TIMEZONE%" --theme "%THEME%" --output-dir "%OUTPUT_DIR%" --anki-profile "%ANKI_PROFILE%"
 if errorlevel 1 (
   echo.
   echo Setup failed.
-  pause
+  call :MAYBE_PAUSE
   exit /b 1
 )
 
 echo.
 echo Setup complete.
-echo Next: run Tokei\Tokei.bat
+echo Next: run run.bat
 echo.
-pause
+call :MAYBE_PAUSE
 endlocal
 exit /b 0
 
+:MAYBE_PAUSE
+if "%TOKEI_NO_PAUSE%"=="1" goto :eof
+pause
+goto :eof
+
 :SAVE_TOGGL_TOKEN
 REM %~1 is the token (quoted by caller)
-> "Tokei\toggl-token.txt" (echo(%~1)
+> "toggl-token.txt" (echo(%~1)
 exit /b 0

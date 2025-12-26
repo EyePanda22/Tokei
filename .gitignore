@@ -1,4 +1,6 @@
 /cache/
 /output/
 /toggl-token.txt
+/.venv/
+/node_modules/
 

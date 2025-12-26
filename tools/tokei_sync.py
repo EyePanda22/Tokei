@@ -102,7 +102,7 @@ def _get_api_token(config_dir: Path) -> str:
             return v
 
     raise SystemExit(
-        "No Toggl API token found. Set TOGGL_API_TOKEN or create Tokei/toggl-token.txt"
+        "No Toggl API token found. Set TOGGL_API_TOKEN or create toggl-token.txt."
     )
 
 

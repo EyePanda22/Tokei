@@ -1,4 +1,4 @@
-// Tokei.mjs — APL-independent dashboard sync + HTML/PNG report generator.
+// Tokei.mjs - APL-independent dashboard sync + HTML/PNG report generator.
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -8,7 +8,7 @@ import readline from "readline";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "..");
+const appRoot = __dirname;
 
 function loadConfig() {
   const configPath = path.join(__dirname, "config.json");
@@ -164,8 +164,8 @@ function askYesNo(prompt) {
 }
 
 async function renderHtmlAndPng({ statsJsonPath, htmlOutPath, pngOutPath }) {
-  const pyRenderer = path.join(repoRoot, "tools", "render_dashboard_html.py");
-  const r = run("python", [pyRenderer, statsJsonPath, htmlOutPath], { cwd: repoRoot });
+  const pyRenderer = path.join(appRoot, "src", "tokei", "render_dashboard_html.py");
+  const r = run("python", [pyRenderer, statsJsonPath, htmlOutPath], { cwd: appRoot });
   if (r.error) throw r.error;
   if (r.status !== 0) {
     const err = (r.stderr || "").trim();
@@ -190,15 +190,15 @@ async function main() {
   const cacheDir = path.join(__dirname, "cache");
   const outputDirCfg = typeof cfg.output_dir === "string" ? cfg.output_dir.trim() : "";
   const outDir = outputDirCfg
-    ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(repoRoot, outputDirCfg))
-    : path.join(__dirname, "output");
+    ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(appRoot, outputDirCfg))
+    : path.join(appRoot, "output");
   ensureDir(cacheDir);
   ensureDir(outDir);
 
   await refreshHashiExport(cfg);
 
   const syncScript = path.join(__dirname, "tools", "tokei_sync.py");
-  let r = run("python", [syncScript], { cwd: repoRoot });
+  let r = run("python", [syncScript], { cwd: appRoot });
   if (r.error) throw r.error;
 
   if (r.status === 2) {
@@ -213,7 +213,7 @@ async function main() {
     console.log(`A report has already been generated for today (Report #${reportNo}${generatedAt ? ` at ${generatedAt}` : ""}).`);
     const ok = await askYesNo("Generate a second report for today? (y/N) ");
     if (!ok) return;
-    r = run("python", [syncScript, "--allow-same-day"], { cwd: repoRoot });
+    r = run("python", [syncScript, "--allow-same-day"], { cwd: appRoot });
     if (r.error) throw r.error;
   }
 

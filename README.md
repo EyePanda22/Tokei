@@ -2,50 +2,79 @@
 
 Tokei is a standalone sync + report generator that combines:
 
-- **Toggl** (API token) for lifetime + today immersion (with description breakdown)
-- **AnkiMorphs** (`ankimorphs.db`) for known lemma/inflection counts
-- **Hashi** (`hashi_exports/anki_stats_snapshot.json`) for Anki retention + review totals
-- **Mokuro** (`volume-data.json`) for manga characters read
-- **GameSentenceMiner** (`gsm.db`) for GSM characters read
+- Toggl (API token) for lifetime + today immersion (with description breakdown)
+- AnkiMorphs (ankimorphs.db) for known lemma/inflection counts
+- Hashi (hashi_exports/anki_stats_snapshot.json) for Anki retention + review totals
+- Mokuro (volume-data.json) for manga characters read
+- GameSentenceMiner (gsm.db) for GSM characters read
 
-It caches merged snapshots into `Tokei/cache/tokei_cache.sqlite`, then renders:
+It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
 
-- HTML: `Tokei/output/Tokei Report <report_no>.html`
-- PNG: `Tokei/output/Tokei Report <report_no>.png`
+- HTML: output/Tokei Report <report_no>.html
+- PNG:  output/Tokei Report <report_no>.png
+- Warnings: output/Tokei Report <report_no> WARNINGS.txt (only if warnings exist)
 
-## Setup
+## Scripts (Windows)
 
-1) Put your Toggl token in `TOGGL_API_TOKEN`, create `Tokei/toggl-token.txt` (one line), **or** enter it during `Tokei/Setup-Tokei.bat`.
-2) Run `Tokei/Setup-Tokei.bat` to set:
-   - timezone (default `local`)
-   - theme (defaults to `midnight`; preview samples in `design/output/`)
-   - output folder (defaults to `Tokei/output/`)
-   - `baseline_hours` (auto-calculated from your HH:MM:SS input, through yesterday)
-   - Anki profile name (default `User 1`)
-3) Run `Tokei/Tokei.bat`.
+- Setup-Environment.bat
+  - Creates the local Python venv in .venv
+  - Installs Python dependencies from requirements.txt
+  - Installs Node dependencies (npm install)
+  - Verifies Node.js 18+ and Puppeteer are available
+  - Safe to run multiple times
+- Setup-Tokei.bat
+  - User configuration / onboarding only
+  - Prompts for Toggl token, baseline, timezone, theme, output folder, Anki profile
+  - Writes config.json and toggl-token.txt
+  - Does not install software or change system state
+  - Safe to run multiple times
+- run.bat
+  - Activates the local venv
+  - Runs the application
+  - Does not perform setup or installation
+  - Safe to run multiple times
+- Tokei.bat
+  - Legacy wrapper that calls run.bat
+- Reset-Tokei.bat
+  - Deletes cache/ and output/
+  - Resets config.json back to defaults
+  - Optional: deletes toggl-token.txt
 
-## Reset
+## Recommended first-time setup
 
-- Run `Tokei/Reset-Tokei.bat` to delete `Tokei/cache/` + `Tokei/output/` and restore `Tokei/config.json` defaults (then re-run setup).
+1) Install Python 3.10+ and Node.js 18+ (external prerequisites).
+2) Run Setup-Environment.bat to create the venv and install dependencies.
+3) Run Setup-Tokei.bat to configure your settings.
+4) Run run.bat to generate a report.
+
+## Re-running guidance
+
+- Setup-Environment.bat and Setup-Tokei.bat are typically one-time; rerun only when dependencies or settings change.
+- Rerun Setup-Environment.bat if Python/Node dependencies change.
+- Rerun Setup-Tokei.bat any time you want to update settings.
+- run.bat is safe to run daily (it will detect same-day reports).
+- Reset-Tokei.bat is destructive; use it only when you want to wipe cache/output.
+
+## External data sources (read-only)
+
+Tokei reads from these external tools but does not modify them:
+
+- Hashi (Anki add-on)
+  - Reads hashi_exports/anki_stats_snapshot.json from your Anki profile
+  - If missing, Tokei warns and continues
+- AnkiMorphs (Anki add-on)
+  - Reads ankimorphs.db from your Anki profile
+  - If missing, Tokei warns and continues
+- GSM (Game Sentence Miner)
+  - Reads gsm.db (auto path uses %APPDATA%\GameSentenceMiner\gsm.db)
+  - If missing, Tokei warns and continues
+- Mokuro
+  - Reads volume-data.json from the configured path
+  - If missing, Tokei warns and continues
 
 ## Notes
 
-- Timezone defaults to `America/Los_Angeles`, but is configurable.
-- On Windows, if your Python install lacks IANA tzdata, set `timezone` to `local` (default) or install `tzdata` for IANA names.
-- For fresh Anki stats, **Anki must be running**: `Tokei/Tokei.bat` triggers a Hashi export via `http://127.0.0.1:8766/export` before it reads `hashi_exports/anki_stats_snapshot.json`.
-- Note: port `8765` is commonly used by AnkiConnect. Hashi defaults to `8766` to avoid conflicts.
-- Toggl `/me/time_entries` may limit how far back it can query.
-- Default behavior is to start from the day you first run Tokei (and then update incrementally).
-- If you want to backfill more history, set `toggl.start_date` in `Tokei/config.json` to a real date (YYYY-MM-DD), subject to Toggl’s limits.
-- `toggl.refresh_days_back`: max backfill window in days (default `60`). With adaptive refresh, Tokei usually fetches far fewer days unless you’ve been away.
-- `toggl.refresh_buffer_days`: extra days added on top of the gap since your last run (so short gaps still refresh a few recent days; default `2`).
-- `toggl.chunk_days`: how many days each Toggl API request covers (smaller = more requests but less likely to hit API range issues; default `7`).
-- If Toggl limits your backfill window (e.g. ~3 months), set `toggl.baseline_hours` in `Tokei/config.json` to account for older lifetime time (similar to an offset). Tokei will compute `lifetime = baseline + cached_sum`.
-- Baseline guidance: in Toggl Reports, set the end date to **yesterday** so you don't double-count today (Tokei fetches today separately).
-- Mokuro manga chars: configure `mokuro.volume_data_path` (defaults to `D:\mokuro-reader\volume-data.json`).
-- GSM chars: configure `gsm.db_path` to `auto` (default), a full path, or `off`.
-- First run behavior:
-  - By default, Tokei fetches **today only** into the cache (so it won’t double-count against your baseline).
-  - If you set `toggl.start_date` to a real date, Tokei will backfill from that date (subject to Toggl's limits).
-- Tokei does not depend on AutoProgressLog (APL) or `autoprogresslog/cache.json`.
-- If any input files/DBs are missing, Tokei prints warnings and writes `Tokei/output/Tokei Report <n> WARNINGS.txt`.
+- output_dir in config.json can be absolute or relative to the Tokei folder.
+- Theme previews are available as PNGs in samples/.
+- For fresh Anki stats, Anki must be running; Tokei triggers a Hashi export via http://127.0.0.1:8766/export before reading the file.
+- Toggl /me/time_entries may limit how far back it can query. Use toggl.baseline_hours to account for older time if needed.
