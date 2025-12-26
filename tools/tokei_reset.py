@@ -28,7 +28,7 @@ def _default_config() -> dict:
             "baseline_hours": 0,
         },
         "ankimorphs": {"known_interval_days": 21},
-        "mokuro": {"volume_data_path": r"D:\mokuro-reader\volume-data.json"},
+        "mokuro": {"volume_data_path": ""},
         "gsm": {"db_path": "auto"},
     }
 

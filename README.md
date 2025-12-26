@@ -40,6 +40,12 @@ It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
   - Resets config.json back to defaults
   - Optional: deletes toggl-token.txt
 
+## Config reference
+
+- `config.json` is the live config used by Tokei.
+- `config.example.json` is documentation only (not loaded at runtime).
+- Field types are implied by the example values; keep the same types when editing `config.json`.
+
 ## Recommended first-time setup
 
 1) Install Python 3.10+ and Node.js 18+ (external prerequisites).
