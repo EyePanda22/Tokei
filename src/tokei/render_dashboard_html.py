@@ -26,6 +26,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from tokei_errors import CONFIG, OUTPUT
 
 def format_hms(total_seconds: int) -> str:
     sign = "-" if total_seconds < 0 else ""
@@ -76,25 +77,25 @@ def main(argv: list[str]) -> int:
             "Usage: python src/tokei/render_dashboard_html.py stats.json output.html",
             file=sys.stderr,
         )
-        return 1
+        return CONFIG.exit_code
 
     stats_path = Path(argv[1])
     out_path = Path(argv[2])
 
     if not stats_path.is_file():
         print(f"stats JSON not found: {stats_path}", file=sys.stderr)
-        return 1
+        return OUTPUT.exit_code
 
     try:
         with stats_path.open("r", encoding="utf-8") as f:
             stats = json.load(f)
     except Exception as exc:  # noqa: BLE001
         print(f"Failed to load stats JSON: {exc}", file=sys.stderr)
-        return 1
+        return OUTPUT.exit_code
 
     if not isinstance(stats, dict):
         print("Stats JSON must be an object", file=sys.stderr)
-        return 1
+        return OUTPUT.exit_code
 
     # Add convenience fields expected by the template.
     today = stats.get("today_immersion") or {}

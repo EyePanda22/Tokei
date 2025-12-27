@@ -16,12 +16,13 @@ datas = [
 
 a = Analysis(
     ["tokei_launcher.py"],
-    pathex=[str(project_root)],
+    pathex=[str(project_root), str(project_root / "tools")],
     binaries=[],
     datas=datas,
     hiddenimports=[
         "sqlite3",
         "_sqlite3",
+        "tokei_errors",
         "jinja2",
         "jinja2.environment",
         "jinja2.loaders",

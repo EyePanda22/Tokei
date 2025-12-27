@@ -49,6 +49,10 @@ It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
 - `config.example.json` is documentation only (not loaded at runtime).
 - Field types are implied by the example values; keep the same types when editing `config.json`.
 
+Troubleshooting:
+
+- Runtime logs + exit code notes: `INTERNAL.md`
+
 ## Recommended first-time setup
 
 1) Install Python 3.10+ and Node.js 18+ (external prerequisites).

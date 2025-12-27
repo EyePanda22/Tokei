@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tokei_errors import ConfigError
 
 def _parse_hms_to_hours(value: str) -> float:
     parts = value.strip().split(":")
@@ -73,7 +74,7 @@ def main(argv: list[str]) -> int:
         try:
             toggl["baseline_hours"] = float(_parse_hms_to_hours(str(args.baseline_hms)))
         except Exception as e:
-            raise SystemExit(f"Invalid --baseline-hms '{args.baseline_hms}': {e}") from e
+            raise ConfigError(f"Invalid --baseline-hms '{args.baseline_hms}': {e}") from e
     elif args.baseline_hours is not None:
         toggl["baseline_hours"] = float(args.baseline_hours)
     data["toggl"] = toggl
@@ -83,4 +84,10 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main(__import__("sys").argv))
+    import sys
+
+    try:
+        raise SystemExit(main(sys.argv))
+    except ConfigError as e:
+        print(str(e), file=sys.stderr)
+        raise SystemExit(e.exit_code)

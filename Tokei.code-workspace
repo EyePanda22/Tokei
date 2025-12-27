@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../Scripts/apl-tools"
+		},
+		{
+			"path": "C:/Users/kyleb/AppData/Roaming/Tokei"
 		}
 	],
 	"settings": {}

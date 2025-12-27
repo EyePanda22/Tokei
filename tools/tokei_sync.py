@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+from tokei_errors import ApiError, ConfigError
+
 try:
     from zoneinfo import ZoneInfo
     from zoneinfo import ZoneInfoNotFoundError
@@ -101,7 +103,7 @@ def _get_api_token(config_dir: Path) -> str:
         if v:
             return v
 
-    raise SystemExit(
+    raise ConfigError(
         "No Toggl API token found. Set TOGGL_API_TOKEN or create toggl-token.txt."
     )
 
@@ -125,17 +127,17 @@ def _fetch_json(url: str, api_token: str) -> Any:
         with request.urlopen(req, timeout=30) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             if resp.status != 200:
-                raise SystemExit(f"Toggl API request failed: {resp.status} {body}")
+                raise ApiError(f"Toggl API request failed: {resp.status} {body}")
     except error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"Toggl API HTTP error: {e.code} {body}") from e
+        raise ApiError(f"Toggl API HTTP error: {e.code} {body}") from e
     except error.URLError as e:
-        raise SystemExit(f"Toggl API connection error: {e.reason}") from e
+        raise ApiError(f"Toggl API connection error: {e.reason}") from e
 
     try:
         return json.loads(body)
     except json.JSONDecodeError as e:
-        raise SystemExit(f"Failed to parse Toggl API JSON: {e}\n{body}") from e
+        raise ApiError(f"Failed to parse Toggl API JSON: {e}\n{body}") from e
 
 
 def _parse_iso_dt(value: str) -> datetime:
@@ -155,7 +157,7 @@ def _fetch_time_entries(api_token: str, start_dt: datetime, end_dt: datetime) ->
     try:
         data = _fetch_json(full_url, api_token)
         return data if isinstance(data, list) else []
-    except SystemExit as e:
+    except ApiError as e:
         # Toggl sometimes limits how far back /me/time_entries can query.
         # Example: "start_date must not be earlier than 2025-09-25"
         msg = str(e)
@@ -721,7 +723,7 @@ def main(argv: list[str]) -> int:
 
     local_tz = datetime.now().astimezone().tzinfo
     if local_tz is None:
-        raise SystemExit("Could not determine local timezone from the OS.")
+        raise ConfigError("Could not determine local timezone from the OS.")
 
     tz: Any
     if cfg.timezone.lower() in ("local", "system"):
@@ -969,4 +971,8 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main(sys.argv))
+    try:
+        raise SystemExit(main(sys.argv))
+    except (ApiError, ConfigError) as e:
+        print(str(e), file=sys.stderr)
+        raise SystemExit(e.exit_code)

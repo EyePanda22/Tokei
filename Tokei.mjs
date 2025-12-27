@@ -12,6 +12,29 @@ const __dirname = path.dirname(__filename);
 const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_ROOT) : __dirname;
 const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : appRoot;
 
+function initRuntimeLogPath() {
+  try {
+    const logsDir = path.join(userRoot, "logs");
+    fs.mkdirSync(logsDir, { recursive: true });
+    return path.join(logsDir, "runtime.log");
+  } catch {
+    return null;
+  }
+}
+
+const runtimeLogPath = initRuntimeLogPath();
+
+function logRuntime(event, details = "") {
+  if (!runtimeLogPath) return;
+  try {
+    const ts = new Date().toISOString();
+    const line = details ? `${ts} ${event} ${details}\n` : `${ts} ${event}\n`;
+    fs.appendFileSync(runtimeLogPath, line, "utf8");
+  } catch {
+    // Never crash due to logging.
+  }
+}
+
 function loadConfig() {
   const configPath = path.join(userRoot, "config.json");
   try {
@@ -169,6 +192,92 @@ function run(cmd, args, opts = {}) {
   return result;
 }
 
+function runPythonLogged(label, cmd, args, opts = {}) {
+  try {
+    logRuntime("PY_START", `${label}`);
+  } catch {
+    // ignore
+  }
+  const result = run(cmd, args, opts);
+  try {
+    logRuntime("PY_END", `${label} status=${result.status}`);
+  } catch {
+    // ignore
+  }
+  return result;
+}
+
+function mapPythonExitCodeToPublicExitCode(pyExitCode) {
+  if (typeof pyExitCode !== "number") return 99;
+  switch (pyExitCode) {
+    case 0:
+      return 0;
+    case 10:
+      return 1; // configuration error
+    case 11:
+      return 2; // API error
+    case 12:
+      return 3; // database/filesystem error
+    case 13:
+      return 3; // output/filesystem error
+    default:
+      return 99;
+  }
+}
+
+function classifyPythonFailureExitCode(pyExitCode, stderrText) {
+  const base = mapPythonExitCodeToPublicExitCode(pyExitCode);
+  if (base !== 99) return base;
+
+  const err = String(stderrText || "");
+  if (pyExitCode === 1) {
+    if (err.includes("sqlite3.") || err.includes("unable to open database file") || err.includes("database disk image")) {
+      return 3;
+    }
+    if (
+      err.includes("PermissionError") ||
+      err.includes("Access is denied") ||
+      err.includes("EACCES") ||
+      err.includes("EPERM") ||
+      err.includes("Errno 13")
+    ) {
+      return 3;
+    }
+    if (err.includes("JSONDecodeError") || err.includes("config.json")) {
+      return 1;
+    }
+  }
+
+  return 99;
+}
+
+function makePythonProcessError(message, pyExitCode) {
+  const err = new Error(message);
+  err.pythonExitCode = pyExitCode;
+  err.tokeiExitCode = 99;
+  try {
+    const lines = String(message || "").split("\n");
+    const stderrText = lines.slice(1).join("\n");
+    err.tokeiExitCode = classifyPythonFailureExitCode(pyExitCode, stderrText);
+  } catch {
+    err.tokeiExitCode = mapPythonExitCodeToPublicExitCode(pyExitCode);
+  }
+  return err;
+}
+
+function makeTokeiExitError(message, tokeiExitCode) {
+  const err = new Error(message);
+  err.tokeiExitCode = tokeiExitCode;
+  return err;
+}
+
+function tagAsFsOrDbError(err) {
+  if (err && typeof err === "object" && typeof err.tokeiExitCode !== "number") {
+    err.tokeiExitCode = 3;
+  }
+  return err;
+}
+
 function askYesNo(prompt) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
@@ -235,11 +344,16 @@ function getDefaultOutputDir() {
 }
 
 async function ensureConfigOrSetup() {
+  logRuntime("APP_START");
   const configPath = getConfigPath();
-  if (fs.existsSync(configPath)) return loadConfig();
+  if (fs.existsSync(configPath)) {
+    const cfg = loadConfig();
+    logRuntime("CONFIG_LOADED", configPath);
+    return cfg;
+  }
 
   if (process.argv.includes("--no-setup") || !process.stdin.isTTY) {
-    throw new Error('config.json not found. Run "Setup-Tokei.bat" first.');
+    throw makeTokeiExitError('config.json not found. Run "Setup-Tokei.bat" first.', 1);
   }
 
   console.log("");
@@ -280,7 +394,7 @@ async function ensureConfigOrSetup() {
   if (!token) {
     const ok = await askYesNo("No token entered. Tokei will NOT track immersion hours. Continue anyway? (y/N) ");
     if (!ok) {
-      throw new Error("Setup cancelled.");
+      throw makeTokeiExitError("Setup cancelled.", 1);
     }
   }
 
@@ -373,6 +487,7 @@ async function ensureConfigOrSetup() {
 
   fs.mkdirSync(userRoot, { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify(base, null, 2) + "\n", "utf8");
+  logRuntime("CONFIG_LOADED", configPath);
 
   if (token) {
     const tokenPath = path.join(userRoot, "toggl-token.txt");
@@ -392,21 +507,29 @@ async function renderHtmlAndPng({ statsJsonPath, htmlOutPath, pngOutPath }) {
   const pyRenderer = path.join(appRoot, "src", "tokei", "render_dashboard_html.py");
   const pyCmd = getPythonCommand();
   const pyArgs = [...getPythonArgsPrefix(), pyRenderer, statsJsonPath, htmlOutPath];
-  const r = run(pyCmd, pyArgs, { cwd: appRoot });
+  const r = runPythonLogged("render_dashboard_html.py", pyCmd, pyArgs, { cwd: appRoot });
   if (r.error) throw r.error;
   if (r.status !== 0) {
     const err = (r.stderr || "").trim();
-    throw new Error(`render_dashboard_html.py failed (code ${r.status})\n${err}`);
+    throw makePythonProcessError(`render_dashboard_html.py failed (code ${r.status})\n${err}`, r.status);
   }
 
-  ensureDir(path.dirname(pngOutPath));
+  try {
+    ensureDir(path.dirname(pngOutPath));
+  } catch (e) {
+    throw tagAsFsOrDbError(e);
+  }
 
   const browser = await puppeteer.launch({ headless: "new" });
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 800, height: 1100 });
     await page.goto(`file://${path.resolve(htmlOutPath)}`, { waitUntil: "networkidle0" });
-    await page.screenshot({ path: pngOutPath, fullPage: true });
+    try {
+      await page.screenshot({ path: pngOutPath, fullPage: true });
+    } catch (e) {
+      throw tagAsFsOrDbError(e);
+    }
   } finally {
     await browser.close();
   }
@@ -422,8 +545,12 @@ async function main() {
   const outDir = outputDirCfg
     ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(tokeiDocumentsRoot, outputDirCfg))
     : path.join(tokeiDocumentsRoot, "output");
-  ensureDir(cacheDir);
-  ensureDir(outDir);
+  try {
+    ensureDir(cacheDir);
+    ensureDir(outDir);
+  } catch (e) {
+    throw tagAsFsOrDbError(e);
+  }
 
   await refreshHashiExport(cfg);
 
@@ -432,7 +559,7 @@ async function main() {
   if (overwriteToday) syncArgs.push("--overwrite-today");
   const pyCmd = getPythonCommand();
   const pyArgsPrefix = getPythonArgsPrefix();
-  let r = run(pyCmd, [...pyArgsPrefix, ...syncArgs], { cwd: appRoot });
+  let r = runPythonLogged("tokei_sync.py", pyCmd, [...pyArgsPrefix, ...syncArgs], { cwd: appRoot });
   if (r.error) throw r.error;
 
   if (r.status === 2 && !overwriteToday) {
@@ -447,21 +574,28 @@ async function main() {
     console.log(`A report has already been generated for today (Report #${reportNo}${generatedAt ? ` at ${generatedAt}` : ""}).`);
     const ok = await askYesNo("Generate a second report for today? (y/N) ");
     if (!ok) return;
-    r = run(pyCmd, [...pyArgsPrefix, syncScript, "--allow-same-day"], { cwd: appRoot });
+    r = runPythonLogged("tokei_sync.py", pyCmd, [...pyArgsPrefix, syncScript, "--allow-same-day"], { cwd: appRoot });
     if (r.error) throw r.error;
   }
 
   if (r.status !== 0) {
     const err = (r.stderr || "").trim();
-    throw new Error(`python ${syncScript} failed (code ${r.status})\n${err}`);
+    throw makePythonProcessError(`python ${syncScript} failed (code ${r.status})\n${err}`, r.status);
   }
 
   const statsJsonPath = (r.stdout || "").trim();
 
-  const stats = JSON.parse(fs.readFileSync(statsJsonPath, "utf8"));
+  let stats = null;
+  try {
+    stats = JSON.parse(fs.readFileSync(statsJsonPath, "utf8"));
+  } catch (e) {
+    throw tagAsFsOrDbError(e);
+  }
   const reportNo = stats.report_no ?? "latest";
   const htmlOutPath = path.join(outDir, `Tokei Report ${reportNo}.html`);
   const pngOutPath = path.join(outDir, `Tokei Report ${reportNo}.png`);
+  logRuntime("REPORT_PATH", htmlOutPath);
+  logRuntime("REPORT_PATH", pngOutPath);
   const warnings = Array.isArray(stats.warnings) ? stats.warnings : [];
   const warningsOutPath = path.join(outDir, `Tokei Report ${reportNo} WARNINGS.txt`);
 
@@ -471,7 +605,11 @@ async function main() {
   console.log(" ", htmlOutPath);
   console.log(" ", pngOutPath);
   if (warnings.length) {
-    fs.writeFileSync(warningsOutPath, warnings.join("\n") + "\n", "utf8");
+    try {
+      fs.writeFileSync(warningsOutPath, warnings.join("\n") + "\n", "utf8");
+    } catch (e) {
+      throw tagAsFsOrDbError(e);
+    }
     console.log();
     console.log("Warnings:");
     for (const w of warnings) console.log(" -", String(w));
@@ -480,6 +618,12 @@ async function main() {
 }
 
 main().catch((e) => {
+  try {
+    logRuntime("FATAL", String(e?.stack || e));
+  } catch {
+    // ignore
+  }
   console.error("Tokei failed:", e?.stack || e);
-  process.exit(1);
+  const code = typeof e?.tokeiExitCode === "number" ? e.tokeiExitCode : 99;
+  process.exit(code);
 });
