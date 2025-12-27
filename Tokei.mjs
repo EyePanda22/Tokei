@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_ROOT) : __dirname;
 const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : appRoot;
+const DEFAULT_THEME = "dark-graphite";
 
 function initRuntimeLogPath() {
   try {
@@ -365,7 +366,7 @@ async function ensureConfigOrSetup() {
   const base = loadExampleConfig() || {
     anki_profile: "User 1",
     timezone: "local",
-    theme: "midnight",
+    theme: DEFAULT_THEME,
     output_dir: getDefaultOutputDir(),
     one_page: true,
     hashi: {
@@ -387,6 +388,7 @@ async function ensureConfigOrSetup() {
     gsm: { db_path: "auto" },
   };
   base.output_dir = getDefaultOutputDir();
+  if (!base.theme) base.theme = DEFAULT_THEME;
 
   const tokenDefault = "";
   console.log("Step 1: Toggl API token (optional but required for hours)");
@@ -411,6 +413,9 @@ async function ensureConfigOrSetup() {
   console.log("");
   console.log("You will be asked for a baseline lifetime time value (HH:MM:SS).");
   console.log("Tokei will add this baseline to the time it can fetch from Toggl (which may be limited).");
+  console.log("");
+  console.log("Format: HH:MM:SS (hours can exceed 24; seconds are required even if 00).");
+  console.log("Example: 120:00:00  or  0:00:00");
   console.log("");
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const y = yesterday.getFullYear();
@@ -445,7 +450,7 @@ async function ensureConfigOrSetup() {
   base.timezone = await promptText("Timezone", base.timezone || "local");
 
   console.log("");
-  const defaultTheme = "dark-graphite";
+  const defaultTheme = DEFAULT_THEME;
   console.log("Theme options (quick pick):");
   console.log(`  ${defaultTheme} (default)`);
   console.log("  bright-daylight");
@@ -477,13 +482,22 @@ async function ensureConfigOrSetup() {
   }
 
   console.log("");
-  base.output_dir = await promptText(
-    "Output folder (relative or absolute)",
-    base.output_dir || getDefaultOutputDir()
-  );
+  const defaultOutDir = base.output_dir || getDefaultOutputDir();
+  console.log("Enter the path where you want reports to be saved.");
+  console.log(`Press Enter for default: ${defaultOutDir}`);
+  console.log("");
+  base.output_dir = await promptText("Output folder (relative or absolute)", defaultOutDir);
 
   console.log("");
   base.anki_profile = await promptText("Anki profile name", base.anki_profile || "User 1");
+
+  console.log("");
+  console.log("Mokuro (optional): to include manga stats, paste the full path to your volume-data.json file.");
+  console.log("Example: D:/Mokuro/volume-data.json");
+  console.log("Press Enter to skip.");
+  console.log("");
+  base.mokuro = base.mokuro || {};
+  base.mokuro.volume_data_path = await promptText("Mokuro volume-data.json path", base.mokuro.volume_data_path || "");
 
   fs.mkdirSync(userRoot, { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify(base, null, 2) + "\n", "utf8");
