@@ -85,7 +85,7 @@ Run requirements for the built exe:
 - Setup-Environment.bat and Setup-Tokei.bat are typically one-time; rerun only when dependencies or settings change.
 - Rerun Setup-Environment.bat if Python/Node dependencies change.
 - Rerun Setup-Tokei.bat any time you want to update settings.
-- run.bat is safe to run daily (it will detect same-day reports).
+- run.bat is safe to run daily (it will detect same-day reports and offer: new report / overwrite today / cancel).
 - Reset-Tokei.bat is destructive; use it only when you want to wipe cache/output.
 
 ## External data sources (read-only)

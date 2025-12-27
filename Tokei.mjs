@@ -290,6 +290,35 @@ function askYesNo(prompt) {
   });
 }
 
+function askDuplicateReportAction(prompt) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    function askAgain() {
+      rl.question(prompt, (answer) => {
+        const v = (answer || "").trim().toLowerCase();
+        if (v === "" || v === "n" || v === "no") {
+          rl.close();
+          resolve("cancel");
+          return;
+        }
+        if (v === "y" || v === "yes") {
+          rl.close();
+          resolve("new");
+          return;
+        }
+        if (v === "o" || v === "overwrite") {
+          rl.close();
+          resolve("overwrite");
+          return;
+        }
+        console.log("Please enter Y (new), O (overwrite), or N (cancel).");
+        askAgain();
+      });
+    }
+    askAgain();
+  });
+}
+
 function promptText(prompt, defaultValue = "") {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const suffix = defaultValue ? ` (press Enter to keep: ${defaultValue})` : "";
@@ -603,10 +632,20 @@ async function main() {
     }
     const reportNo = info?.report_no ?? "?";
     const generatedAt = info?.generated_at ?? "";
-    console.log(`A report has already been generated for today (Report #${reportNo}${generatedAt ? ` at ${generatedAt}` : ""}).`);
-    const ok = await askYesNo("Generate a second report for today? (y/N) ");
-    if (!ok) return;
-    r = runPythonLogged("tokei_sync.py", pyCmd, [...pyArgsPrefix, syncScript, "--allow-same-day"], { cwd: appRoot });
+    console.log(
+      `A report has already been generated for today (Report #${reportNo}${
+        generatedAt ? ` at ${generatedAt}` : ""
+      }).`
+    );
+    const action = await askDuplicateReportAction(
+      "Choose: [Y] new report, [O] overwrite today's report, [N] cancel (default N) > "
+    );
+    if (action === "cancel") return;
+    if (action === "overwrite") {
+      r = runPythonLogged("tokei_sync.py", pyCmd, [...pyArgsPrefix, syncScript, "--overwrite-today"], { cwd: appRoot });
+    } else {
+      r = runPythonLogged("tokei_sync.py", pyCmd, [...pyArgsPrefix, syncScript, "--allow-same-day"], { cwd: appRoot });
+    }
     if (r.error) throw r.error;
   }
 
