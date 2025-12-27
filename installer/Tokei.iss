@@ -32,7 +32,7 @@ Source: "..\dist\Tokei\*"; DestDir: "{app}"; Excludes: "node_modules\*,config.js
 
 [Dirs]
 Name: "{userappdata}\Tokei"; Flags: uninsneveruninstall
-Name: "{userdocs}\Tokei\Reports"; Flags: uninsneveruninstall
+Name: "{userpictures}\Tokei"; Flags: uninsneveruninstall
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -85,7 +85,7 @@ begin
   if CurStep = ssPostInstall then
   begin
     UserRoot := ExpandConstant('{userappdata}\Tokei');
-    ReportsDir := ExpandConstant('{userdocs}\Tokei\Reports');
+    ReportsDir := ExpandConstant('{userpictures}\Tokei');
     ConfigPath := AddBackslash(UserRoot) + 'config.json';
 
     if not FileExists(ConfigPath) then

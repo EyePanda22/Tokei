@@ -341,6 +341,12 @@ function loadExampleConfig() {
 function getDefaultOutputDir() {
   const home = os.homedir ? os.homedir() : "";
   if (!home) return "output";
+  return path.join(home, "Pictures", "Tokei");
+}
+
+function getLegacyDefaultOutputDir() {
+  const home = os.homedir ? os.homedir() : "";
+  if (!home) return null;
   return path.join(home, "Documents", "Tokei", "output");
 }
 
@@ -484,6 +490,7 @@ async function ensureConfigOrSetup() {
   console.log("");
   const defaultOutDir = base.output_dir || getDefaultOutputDir();
   console.log("Enter the path where you want reports to be saved.");
+  console.log("PNG reports and warnings will be saved here; HTML reports will be saved in a subfolder named: HTML");
   console.log(`Press Enter for default: ${defaultOutDir}`);
   console.log("");
   base.output_dir = await promptText("Output folder (relative or absolute)", defaultOutDir);
@@ -521,6 +528,11 @@ async function renderHtmlAndPng({ statsJsonPath, htmlOutPath, pngOutPath }) {
   const pyRenderer = path.join(appRoot, "src", "tokei", "render_dashboard_html.py");
   const pyCmd = getPythonCommand();
   const pyArgs = [...getPythonArgsPrefix(), pyRenderer, statsJsonPath, htmlOutPath];
+  try {
+    ensureDir(path.dirname(htmlOutPath));
+  } catch (e) {
+    throw tagAsFsOrDbError(e);
+  }
   const r = runPythonLogged("render_dashboard_html.py", pyCmd, pyArgs, { cwd: appRoot });
   if (r.error) throw r.error;
   if (r.status !== 0) {
@@ -553,15 +565,21 @@ async function main() {
   const overwriteToday = process.argv.includes("--overwrite-today");
   const cfg = await ensureConfigOrSetup();
   const cacheDir = path.join(userRoot, "cache");
-  const outputDirCfg = typeof cfg.output_dir === "string" ? cfg.output_dir.trim() : "";
-  const documentsRoot = os.homedir ? path.join(os.homedir(), "Documents") : userRoot;
-  const tokeiDocumentsRoot = path.join(documentsRoot, "Tokei");
-  const outDir = outputDirCfg
-    ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(tokeiDocumentsRoot, outputDirCfg))
-    : path.join(tokeiDocumentsRoot, "output");
+  const rawOutputDirCfg = typeof cfg.output_dir === "string" ? cfg.output_dir.trim() : "";
+  const legacyDefaultOutDir = getLegacyDefaultOutputDir();
+  const outputDirCfg =
+    legacyDefaultOutDir && rawOutputDirCfg && path.resolve(rawOutputDirCfg) === path.resolve(legacyDefaultOutDir)
+      ? ""
+      : rawOutputDirCfg;
+  const defaultOutRoot = getDefaultOutputDir();
+  const outRoot = outputDirCfg
+    ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(defaultOutRoot, outputDirCfg))
+    : defaultOutRoot;
+  const htmlDir = path.join(outRoot, "HTML");
   try {
     ensureDir(cacheDir);
-    ensureDir(outDir);
+    ensureDir(outRoot);
+    ensureDir(htmlDir);
   } catch (e) {
     throw tagAsFsOrDbError(e);
   }
@@ -606,12 +624,12 @@ async function main() {
     throw tagAsFsOrDbError(e);
   }
   const reportNo = stats.report_no ?? "latest";
-  const htmlOutPath = path.join(outDir, `Tokei Report ${reportNo}.html`);
-  const pngOutPath = path.join(outDir, `Tokei Report ${reportNo}.png`);
+  const htmlOutPath = path.join(htmlDir, `Tokei Report ${reportNo}.html`);
+  const pngOutPath = path.join(outRoot, `Tokei Report ${reportNo}.png`);
   logRuntime("REPORT_PATH", htmlOutPath);
   logRuntime("REPORT_PATH", pngOutPath);
   const warnings = Array.isArray(stats.warnings) ? stats.warnings : [];
-  const warningsOutPath = path.join(outDir, `Tokei Report ${reportNo} WARNINGS.txt`);
+  const warningsOutPath = path.join(outRoot, `Tokei Report ${reportNo} WARNINGS.txt`);
 
   await renderHtmlAndPng({ statsJsonPath, htmlOutPath, pngOutPath });
 

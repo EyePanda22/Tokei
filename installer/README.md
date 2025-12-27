@@ -50,4 +50,4 @@ Do you want to remove user data stored in %APPDATA%\Tokei ?
 - Yes: `%APPDATA%\Tokei\` is removed.
 - No: user data is preserved.
 
-`%USERPROFILE%\Documents\Tokei\` is never deleted.
+`%USERPROFILE%\Pictures\Tokei\` is never deleted.
