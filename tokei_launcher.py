@@ -5,6 +5,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 
@@ -47,10 +48,16 @@ def main() -> int:
     env_user_root = os.environ.get("TOKEI_USER_ROOT")
     if env_user_root and env_user_root.strip():
         user_root = Path(env_user_root).expanduser().resolve()
-    config_path = user_root / "config.json"
-    if not config_path.exists():
-        print('config.json not found. Run "Setup-Tokei.bat" first.', file=sys.stderr)
-        return 2
+
+    pause_at_end = False
+    args = sys.argv[1:]
+    if getattr(sys, "frozen", False):
+        pause_at_end = True
+    if os.environ.get("TOKEI_NO_PAUSE", "").strip() == "1":
+        pause_at_end = False
+    if "--no-pause" in args:
+        pause_at_end = False
+        args = [a for a in args if a != "--no-pause"]
 
     node = shutil.which("node")
     if not node:
@@ -69,10 +76,29 @@ def main() -> int:
         env["TOKEI_PYTHON_EXE"] = str(Path(sys.executable).resolve())
         env["TOKEI_PYTHON_ARGS"] = "--run-python"
 
-    cmd = [node, str(mjs_path), *sys.argv[1:]]
+    cmd = [node, str(mjs_path), *args]
     result = subprocess.run(cmd, cwd=str(user_root), env=env)
-    return int(result.returncode)
+    code = int(result.returncode)
+    if pause_at_end and sys.stdin.isatty():
+        try:
+            input("Press Enter to close...")
+        except EOFError:
+            pass
+    return code
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    exit_code = 1
+    try:
+        exit_code = main()
+    except Exception:
+        traceback.print_exc()
+        exit_code = 1
+    finally:
+        if exit_code != 0 and "--run-python" not in sys.argv and sys.stdin.isatty():
+            try:
+                input("Press Enter to close...")
+            except EOFError:
+                pass
+
+    raise SystemExit(exit_code)

@@ -1,8 +1,8 @@
 {
   "anki_profile": "User 1",
   "timezone": "local",
-  "theme": "midnight",
-  "output_dir": "output",
+  "theme": "dark-graphite",
+  "output_dir": "C:\\Users\\YOURNAME\\Documents\\Tokei\\output",
   "one_page": true,
   "hashi": {
     "host": "127.0.0.1",

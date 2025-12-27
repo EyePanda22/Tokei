@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
 import puppeteer from "puppeteer";
 import readline from "readline";
+import os from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -179,6 +180,214 @@ function askYesNo(prompt) {
   });
 }
 
+function promptText(prompt, defaultValue = "") {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const suffix = defaultValue ? ` (press Enter to keep: ${defaultValue})` : "";
+  return new Promise((resolve) => {
+    rl.question(`${prompt}${suffix} > `, (answer) => {
+      rl.close();
+      const trimmed = (answer || "").trim();
+      resolve(trimmed === "" ? defaultValue : trimmed);
+    });
+  });
+}
+
+function parseHmsToHours(value) {
+  const parts = value.trim().split(":");
+  if (parts.length !== 3) {
+    throw new Error("expected HH:MM:SS");
+  }
+  const [h, m, s] = parts.map((p) => Number(p));
+  if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) {
+    throw new Error("non-numeric values not allowed");
+  }
+  if (h < 0 || m < 0 || s < 0) {
+    throw new Error("negative values not allowed");
+  }
+  if (m >= 60 || s >= 60) {
+    throw new Error("minutes/seconds out of range");
+  }
+  return h + m / 60.0 + s / 3600.0;
+}
+
+function formatHmsFromHours(hours) {
+  const total = Math.round(Number(hours || 0) * 3600);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function loadExampleConfig() {
+  const examplePath = path.join(appRoot, "config.example.json");
+  try {
+    const raw = JSON.parse(fs.readFileSync(examplePath, "utf8"));
+    return raw && typeof raw === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function getDefaultOutputDir() {
+  const home = os.homedir ? os.homedir() : "";
+  if (!home) return "output";
+  return path.join(home, "Documents", "Tokei", "output");
+}
+
+async function ensureConfigOrSetup() {
+  const configPath = getConfigPath();
+  if (fs.existsSync(configPath)) return loadConfig();
+
+  if (process.argv.includes("--no-setup") || !process.stdin.isTTY) {
+    throw new Error('config.json not found. Run "Setup-Tokei.bat" first.');
+  }
+
+  console.log("");
+  console.log("=== Tokei Setup ===");
+  console.log("");
+  console.log("This will update: config.json");
+  console.log("");
+
+  const base = loadExampleConfig() || {
+    anki_profile: "User 1",
+    timezone: "local",
+    theme: "midnight",
+    output_dir: getDefaultOutputDir(),
+    one_page: true,
+    hashi: {
+      host: "127.0.0.1",
+      port: 8766,
+      token: null,
+      refresh_timeout_ms: 10000,
+      require_fresh: true,
+    },
+    toggl: {
+      start_date: "auto",
+      refresh_days_back: 60,
+      refresh_buffer_days: 2,
+      chunk_days: 7,
+      baseline_hours: 0,
+    },
+    ankimorphs: { known_interval_days: 21 },
+    mokuro: { volume_data_path: "" },
+    gsm: { db_path: "auto" },
+  };
+  base.output_dir = getDefaultOutputDir();
+
+  const tokenDefault = "";
+  console.log("Step 1: Toggl API token (optional but required for hours)");
+  const token = await promptText("Enter Toggl API token (press Enter to skip)", tokenDefault);
+  if (!token) {
+    const ok = await askYesNo("No token entered. Tokei will NOT track immersion hours. Continue anyway? (y/N) ");
+    if (!ok) {
+      throw new Error("Setup cancelled.");
+    }
+  }
+
+  console.log("");
+  console.log("How to find your Toggl API token:");
+  console.log(" - Toggl > Profile > Profile settings");
+  console.log(" - Scroll to the very bottom to reveal your API token");
+  console.log("");
+  console.log("If you enter it here, it will be saved to: toggl-token.txt (plain text)");
+  console.log("You can also set it via the TOGGL_API_TOKEN environment variable instead.");
+  console.log("");
+
+  let baselineHms = formatHmsFromHours(base?.toggl?.baseline_hours || 0);
+  console.log("");
+  console.log("You will be asked for a baseline lifetime time value (HH:MM:SS).");
+  console.log("Tokei will add this baseline to the time it can fetch from Toggl (which may be limited).");
+  console.log("");
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const y = yesterday.getFullYear();
+  const m = String(yesterday.getMonth() + 1).padStart(2, "0");
+  const d = String(yesterday.getDate()).padStart(2, "0");
+  const ymd = `${y}-${m}-${d}`;
+  console.log("How to get baseline lifetime time from Toggl (recommended):");
+  console.log(" 1) Go to Toggl Track > Reports > Summary:");
+  console.log("    https://track.toggl.com/reports/summary");
+  console.log(" 2) Set the date range:");
+  console.log("    - Start: the earliest day you started tracking immersion");
+  console.log(`    - End:   ${ymd}  (yesterday; do NOT include today in the baseline)`);
+  console.log(" 3) Select your immersion project(s) (if you track multiple immersion projects, select them all)");
+  console.log(" 4) Make sure you are viewing the correct workspace");
+  console.log(' 5) Copy the "Total" hours shown at the top and enter it below');
+  console.log("");
+  console.log("Why end date is yesterday:");
+  console.log(" - Tokei will fetch TODAY's time via the Toggl API and add it on top of this baseline.");
+  console.log("");
+  while (true) {
+    const input = await promptText("Enter baseline lifetime time (HH:MM:SS)", baselineHms);
+    try {
+      base.toggl = base.toggl || {};
+      base.toggl.baseline_hours = parseHmsToHours(input);
+      break;
+    } catch (e) {
+      console.log(`Invalid baseline time: ${e.message}`);
+    }
+  }
+
+  console.log("");
+  base.timezone = await promptText("Timezone", base.timezone || "local");
+
+  console.log("");
+  const defaultTheme = "dark-graphite";
+  console.log("Theme options (quick pick):");
+  console.log(`  ${defaultTheme} (default)`);
+  console.log("  bright-daylight");
+  console.log("  sakura-night");
+  console.log("");
+  console.log("Press Enter for default, or type 'list' to show all themes.");
+  console.log("");
+  while (true) {
+    const themeInput = await promptText("Theme", base.theme || defaultTheme);
+    if (themeInput.toLowerCase() !== "list") {
+      base.theme = themeInput;
+      break;
+    }
+    console.log("");
+    console.log("All themes:");
+    console.log("  midnight");
+    console.log("  sakura-night");
+    console.log("  forest-dawn");
+    console.log("  neutral-balanced");
+    console.log("  dark-graphite");
+    console.log("  solar-slate");
+    console.log("  neon-arcade");
+    console.log("  bright-daylight");
+    console.log("  bright-mint");
+    console.log("  bright-iris");
+    console.log("");
+    console.log("To preview themes, open the sample PNGs in: samples\\");
+    console.log("");
+  }
+
+  console.log("");
+  base.output_dir = await promptText(
+    "Output folder (relative or absolute)",
+    base.output_dir || getDefaultOutputDir()
+  );
+
+  console.log("");
+  base.anki_profile = await promptText("Anki profile name", base.anki_profile || "User 1");
+
+  fs.mkdirSync(userRoot, { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(base, null, 2) + "\n", "utf8");
+
+  if (token) {
+    const tokenPath = path.join(userRoot, "toggl-token.txt");
+    fs.writeFileSync(tokenPath, token + "\n", "utf8");
+  }
+
+  console.log("");
+  console.log("Setup complete.");
+  if (!process.env.TOKEI_PYTHON_EXE) {
+    console.log("Next: run run.bat");
+  }
+  console.log("");
+  return base;
+}
+
 async function renderHtmlAndPng({ statsJsonPath, htmlOutPath, pngOutPath }) {
   const pyRenderer = path.join(appRoot, "src", "tokei", "render_dashboard_html.py");
   const pyCmd = getPythonCommand();
@@ -204,17 +413,15 @@ async function renderHtmlAndPng({ statsJsonPath, htmlOutPath, pngOutPath }) {
 }
 
 async function main() {
-  if (!fs.existsSync(getConfigPath())) {
-    throw new Error('config.json not found. Run "Setup-Tokei.bat" first.');
-  }
-
   const overwriteToday = process.argv.includes("--overwrite-today");
-  const cfg = loadConfig();
+  const cfg = await ensureConfigOrSetup();
   const cacheDir = path.join(userRoot, "cache");
   const outputDirCfg = typeof cfg.output_dir === "string" ? cfg.output_dir.trim() : "";
+  const documentsRoot = os.homedir ? path.join(os.homedir(), "Documents") : userRoot;
+  const tokeiDocumentsRoot = path.join(documentsRoot, "Tokei");
   const outDir = outputDirCfg
-    ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(userRoot, outputDirCfg))
-    : path.join(userRoot, "output");
+    ? (path.isAbsolute(outputDirCfg) ? outputDirCfg : path.resolve(tokeiDocumentsRoot, outputDirCfg))
+    : path.join(tokeiDocumentsRoot, "output");
   ensureDir(cacheDir);
   ensureDir(outDir);
 

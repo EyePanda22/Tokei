@@ -3,6 +3,12 @@ setlocal EnableExtensions
 
 cd /d "%~dp0"
 
+set "PAUSE_AT_END=1"
+if "%TOKEI_NO_PAUSE%"=="1" set "PAUSE_AT_END=0"
+for %%A in (%*) do (
+  if /I "%%~A"=="--no-pause" set "PAUSE_AT_END=0"
+)
+
 if not exist ".venv\Scripts\activate.bat" (
   echo.
   echo Local venv not found at .venv\Scripts\activate.bat
@@ -61,6 +67,10 @@ if errorlevel 1 (
 )
 
 node Tokei.mjs
-if errorlevel 1 pause
+set "EXITCODE=%ERRORLEVEL%"
+if "%PAUSE_AT_END%"=="1" (
+  echo.
+  pause
+)
 
-endlocal
+endlocal & exit /b %EXITCODE%
