@@ -25,6 +25,7 @@ Output is written to `dist-installer\Tokei-Setup-<version>.exe`.
 - Sets per-user `TOKEI_USER_ROOT` to `%APPDATA%\Tokei` so the exe reads config from there
 - Adds Start Menu shortcut; desktop shortcut is optional
 - Does not overwrite existing user data in `%APPDATA%\Tokei\`
+- Optional known-words CSVs: put one or more `*.csv` files in `%APPDATA%\Tokei\data\` (only column 1 is used; header rows are allowed)
 
 ## Node.js Preflight Check
 

@@ -1042,48 +1042,33 @@
           </div>
         </section>
 
-        <!-- Row 1: Known Words / Inflections -->
+        <!-- Row 1: Known Words -->
         <section class="card card-known">
           <div class="card-inner">
             <header class="card-header">
-              <div class="card-title">Lexical Progress</div>
-              <div class="card-tag">Anki</div>
+              <div class="card-title">Known Words</div>
+              <div class="card-tag">Tokei</div>
             </header>
 
-            <div class="split-row">
-              <div>
-                <div class="split-label">Known Words</div>
-                <div class="split-value">{{ stats.known_words | format_k }}</div>
-                <div class="split-subtext">
-                  {% set d = stats.known_words_delta %}
-                  {% if d == 0 %}
-                    <span class="delta">—</span>
-                  {% else %}
-                    <span class="delta {{ 'up' if d >= 0 else 'down' }}">
-                      <span class="chevron">{{ '▲' if d >= 0 else '▼' }}</span>
-                      {{ d }}
-                    </span>
-                  {% endif %}
-                  <span class="muted">since last report</span>
-                </div>
-              </div>
+            <div class="value-large">
+              <span>{{ "{:,}".format(stats.known_words|default(0)|int) }}</span>
+              <span class="unit">words</span>
+            </div>
+            <div class="muted">Across all tracked sources</div>
 
-              <div>
-                <div class="split-label">Known Inflections</div>
-                <div class="split-value">{{ stats.known_inflections | format_k }}</div>
-                <div class="split-subtext">
-                  {% set d2 = stats.known_inflections_delta %}
-                  {% if d2 == 0 %}
-                    <span class="delta">—</span>
-                  {% else %}
-                    <span class="delta {{ 'up' if d2 >= 0 else 'down' }}">
-                      <span class="chevron">{{ '▲' if d2 >= 0 else '▼' }}</span>
-                      {{ d2 }}
-                    </span>
-                  {% endif %}
-                  <span class="muted">since last report</span>
-                </div>
-              </div>
+            <div class="h-separator"></div>
+
+            <div class="muted">
+              <span>Change since last report:</span>
+              {% set d = stats.known_words_delta %}
+              {% if d == 0 %}
+                <span class="delta">—</span>
+              {% else %}
+                <span class="delta {{ 'up' if d >= 0 else 'down' }}">
+                  <span class="chevron">{{ '▲' if d >= 0 else '▼' }}</span>
+                  {{ "{:,}".format(d|int) }} words
+                </span>
+              {% endif %}
             </div>
           </div>
         </section>

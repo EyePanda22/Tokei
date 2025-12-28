@@ -226,39 +226,103 @@ def _phase2_ingest_known_csv(
     today: date,
     rule_id: str,
 ) -> int:
-    csv_candidates = [
-        root / "data" / "known.csv",
-        root / "data" / "csv" / "known.csv",
-        root / "known.csv",
-    ]
-    csv_path: Path | None = None
-    for p in csv_candidates:
-        if p.exists():
-            csv_path = p
-            break
-    if csv_path is None:
+    data_dir = root / "data"
+    csv_paths: list[Path] = []
+    if data_dir.is_dir():
+        csv_paths = sorted([p for p in data_dir.glob("*.csv") if p.is_file()])
+
+    if not csv_paths:
+        legacy_candidates = [
+            root / "data" / "known.csv",
+            root / "data" / "csv" / "known.csv",
+            root / "known.csv",
+        ]
+        csv_paths = [p for p in legacy_candidates if p.exists()]
+
+    if not csv_paths:
         return 0
 
     inserted = 0
-    try:
-        with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-    except Exception:
-        return 0
+    for csv_path in csv_paths:
+        try:
+            with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+        except Exception:
+            continue
 
-    start_idx = 0
-    if rows:
-        first_raw = rows[0][0] if rows[0] else ""
-        first = _normalize_surface_for_identity(first_raw)
-        first_lc = first.lower()
-        header_words = {"word", "words", "surface", "expression", "lexeme", "lemma", "lemmas"}
-        if first_lc in header_words or (
-            re.search(r"[a-z]", first_lc)
-            and any(k in first_lc for k in ("word", "surface", "expression", "lexeme", "lemma", "morph"))
-        ):
-            start_idx = 1
-            header_surface = first
+        def _has_japanese_chars(value: str) -> bool:
+            return bool(re.search(r"[\u3040-\u30ff\u3400-\u9fff]", value))
+
+        def _next_nonempty_first(start: int) -> str:
+            for r in rows[start:]:
+                cell = _normalize_surface_for_identity(r[0] if r else "")
+                if cell:
+                    return cell
+            return ""
+
+        def _looks_like_header_row(idx: int) -> bool:
+            r = rows[idx]
+            first = _normalize_surface_for_identity(r[0] if r else "")
+            if not first:
+                return False
+
+            first_lc = first.lower()
+            header_words = {
+                "word",
+                "words",
+                "surface",
+                "expression",
+                "lexeme",
+                "lemma",
+                "lemmas",
+                "dictform",
+                "dict_form",
+                "dictionaryform",
+            }
+            if first_lc in header_words:
+                return True
+
+            if re.search(r"[a-z]", first_lc) and any(
+                k in first_lc
+                for k in (
+                    "word",
+                    "surface",
+                    "expression",
+                    "lexeme",
+                    "lemma",
+                    "morph",
+                    "dictform",
+                    "dict_form",
+                    "hascard",
+                    "reading",
+                    "translation",
+                )
+            ):
+                return True
+
+            if len(r) > 1:
+                rest = _normalize_surface_for_identity(" ".join(str(x or "") for x in r[1:]))
+                if (
+                    re.search(r"[A-Za-z]", first)
+                    and re.search(r"[A-Za-z]", rest)
+                    and not _has_japanese_chars(first)
+                    and not _has_japanese_chars(rest)
+                ):
+                    return True
+
+            if re.search(r"[A-Za-z]", first) and not _has_japanese_chars(first):
+                next_first = _next_nonempty_first(idx + 1)
+                if next_first and _has_japanese_chars(next_first):
+                    return True
+
+            return False
+
+        start_idx = 0
+        while start_idx < len(rows) and _looks_like_header_row(start_idx):
+            header_surface = _normalize_surface_for_identity(
+                rows[start_idx][0] if rows[start_idx] else ""
+            )
             if header_surface:
                 try:
                     header_key = _content_key_for_lexeme(header_surface, rule_id)
@@ -271,24 +335,25 @@ def _phase2_ingest_known_csv(
                         con.execute("DELETE FROM lexemes WHERE id=?", (lexeme_id,))
                 except Exception:
                     pass
+            start_idx += 1
 
-    day_s = today.isoformat()
-    for row in rows[start_idx:]:
-        surface_raw = row[0] if row else ""
-        surface = _normalize_surface_for_identity(surface_raw)
-        if not surface:
-            continue
-        key = _content_key_for_lexeme(surface, rule_id)
-        _upsert_lexeme(
-            con,
-            content_key=key,
-            surface=surface,
-            normalized_surface=surface,
-            rule_id=rule_id,
-            first_seen=day_s,
-            last_seen=day_s,
-        )
-        inserted += 1
+        day_s = today.isoformat()
+        for row in rows[start_idx:]:
+            surface_raw = row[0] if row else ""
+            surface = _normalize_surface_for_identity(surface_raw)
+            if not surface:
+                continue
+            key = _content_key_for_lexeme(surface, rule_id)
+            _upsert_lexeme(
+                con,
+                content_key=key,
+                surface=surface,
+                normalized_surface=surface,
+                rule_id=rule_id,
+                first_seen=day_s,
+                last_seen=day_s,
+            )
+            inserted += 1
 
     return inserted
 
@@ -602,6 +667,22 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         con.execute("ALTER TABLE snapshots ADD COLUMN gsm_chars_total INTEGER NOT NULL DEFAULT 0;")
     if "warnings_json" not in cols:
         con.execute("ALTER TABLE snapshots ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]';")
+    if "tokei_surface_words" not in cols:
+        con.execute("ALTER TABLE snapshots ADD COLUMN tokei_surface_words INTEGER NOT NULL DEFAULT 0;")
+
+
+def _read_tokei_surface_words(root: Path) -> int:
+    words_db = root / "cache" / "tokei_words.sqlite"
+    if not words_db.exists():
+        return 0
+    con = sqlite3.connect(f"file:{words_db}?mode=ro", uri=True)
+    try:
+        row = con.execute("SELECT COUNT(DISTINCT normalized_surface) FROM lexemes").fetchone()
+        return int(row[0] or 0) if row else 0
+    except sqlite3.Error:
+        return 0
+    finally:
+        con.close()
 
 
 def _get_meta(con: sqlite3.Connection, key: str) -> str | None:
@@ -914,6 +995,7 @@ def _build_report_model(
     today_breakdown: list[dict[str, Any]],
     known_lemmas: int,
     known_inflections: int,
+    tokei_surface_words: int,
     anki_total_reviews: int,
     anki_total_reviews_delta: int,
     retention_rate: float,
@@ -937,10 +1019,11 @@ def _build_report_model(
         "warnings": list(warnings),
         "total_immersion_hours": lifetime_seconds / 3600.0,
         "total_immersion_delta_hours": total_immersion_delta_hours,
-        "known_words": known_lemmas,
+        "known_words": int(tokei_surface_words),
         "known_words_delta": known_words_delta,
         "known_inflections": known_inflections,
         "known_inflections_delta": known_inflections_delta,
+        "tokei_surface_words": int(tokei_surface_words),
         "today_immersion": {
             "total_seconds": int(today_seconds),
             "entries": today_breakdown,
@@ -1201,6 +1284,7 @@ def main(argv: list[str]) -> int:
 
         warnings: list[str] = []
         known_lemmas, known_inflections = _read_ankimorphs_known_counts(cfg, warnings=warnings)
+        tokei_surface_words = _read_tokei_surface_words(root)
         manga_chars_total = _read_mokuro_manga_chars(cfg, warnings=warnings)
         gsm_chars_total = _read_gsm_chars(cfg, warnings=warnings)
         anki_total, anki_reviews, anki_true_retention = _read_hashi_stats(cfg, warnings=warnings)
@@ -1211,7 +1295,7 @@ def main(argv: list[str]) -> int:
             prev = con.execute(
                 """
                 SELECT toggl_lifetime_seconds, known_lemmas, known_inflections, manga_chars_total, gsm_chars_total,
-                       anki_total_reviews, anki_true_retention
+                       anki_total_reviews, anki_true_retention, tokei_surface_words
                 FROM snapshots
                 WHERE run_id < ?
                 ORDER BY run_id DESC
@@ -1223,7 +1307,7 @@ def main(argv: list[str]) -> int:
             prev = con.execute(
                 """
                 SELECT toggl_lifetime_seconds, known_lemmas, known_inflections, manga_chars_total, gsm_chars_total,
-                       anki_total_reviews, anki_true_retention
+                       anki_total_reviews, anki_true_retention, tokei_surface_words
                 FROM snapshots
                 ORDER BY run_id DESC
                 LIMIT 1
@@ -1237,12 +1321,13 @@ def main(argv: list[str]) -> int:
         prev_gsm_chars = int(prev[4]) if prev else gsm_chars_total
         prev_anki_total = int(prev[5]) if prev else anki_total
         prev_retention_rate = (float(prev[6]) * 100.0) if prev else (anki_true_retention * 100.0)
+        prev_tokei_surface_words = int(prev[7]) if prev else tokei_surface_words
 
         retention_rate = anki_true_retention * 100.0
         retention_delta = round(retention_rate - prev_retention_rate, 2)
 
         anki_total_delta = int(anki_total - prev_anki_total)
-        known_words_delta = int(known_lemmas - prev_known_lemmas)
+        known_words_delta = int(tokei_surface_words - prev_tokei_surface_words)
         known_inflections_delta = int(known_inflections - prev_known_inflections)
         manga_chars_delta = int(manga_chars_total - prev_manga_chars)
         gsm_chars_delta = int(gsm_chars_total - prev_gsm_chars)
@@ -1266,6 +1351,7 @@ def main(argv: list[str]) -> int:
                     toggl_today_breakdown_json=?,
                     known_lemmas=?,
                     known_inflections=?,
+                    tokei_surface_words=?,
                     manga_chars_total=?,
                     gsm_chars_total=?,
                     anki_total_reviews=?,
@@ -1284,6 +1370,7 @@ def main(argv: list[str]) -> int:
                     json.dumps(today_breakdown, ensure_ascii=False),
                     int(known_lemmas),
                     int(known_inflections),
+                    int(tokei_surface_words),
                     int(manga_chars_total),
                     int(gsm_chars_total),
                     int(anki_total),
@@ -1299,10 +1386,10 @@ def main(argv: list[str]) -> int:
                 INSERT INTO snapshots(
                   generated_at, report_day, timezone, theme,
                   toggl_lifetime_seconds, toggl_today_seconds, toggl_today_breakdown_json,
-                  known_lemmas, known_inflections, manga_chars_total, gsm_chars_total,
+                  known_lemmas, known_inflections, tokei_surface_words, manga_chars_total, gsm_chars_total,
                   anki_total_reviews, anki_reviews, anki_true_retention, warnings_json
                 )
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     now.isoformat(),
@@ -1314,6 +1401,7 @@ def main(argv: list[str]) -> int:
                     json.dumps(today_breakdown, ensure_ascii=False),
                     int(known_lemmas),
                     int(known_inflections),
+                    int(tokei_surface_words),
                     int(manga_chars_total),
                     int(gsm_chars_total),
                     int(anki_total),
@@ -1335,6 +1423,7 @@ def main(argv: list[str]) -> int:
             today_breakdown=today_breakdown,
             known_lemmas=known_lemmas,
             known_inflections=known_inflections,
+            tokei_surface_words=tokei_surface_words,
             anki_total_reviews=anki_total,
             anki_total_reviews_delta=anki_total_delta,
             retention_rate=retention_rate,
