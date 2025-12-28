@@ -22,7 +22,10 @@ It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
 ### Quick start (most users)
 
 1) Install Node.js 18+
-2) Run Tokei from the Start Menu shortcut
+2) Install the Hashi Anki add-on (required for word count + Anki stats)
+   - In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
+   - Link: https://ankiweb.net/shared/info/1132527238
+3) Run Tokei from the Start Menu shortcut
 
 Tokei will generate HTML reports by default. PNG reports require additional setup (see below).
 
@@ -94,6 +97,7 @@ Troubleshooting:
 Tokei reads from these external tools but does not modify them:
 
 - Hashi (Anki add-on)
+  - Install via Anki: `Tools > Add-ons > Get Add-ons...` -> `1132527238` (https://ankiweb.net/shared/info/1132527238)
   - Reads hashi_exports/anki_stats_snapshot.json from your Anki profile
   - If missing, Tokei warns and continues
 - GSM (Game Sentence Miner)
