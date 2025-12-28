@@ -7,7 +7,7 @@ Note: Tokei currently runs as a console app (CLI). A UI is planned.
 # Tokei (dashboard sync)
 
 <p align="center">
-  <img src="tokeilogo.png" alt="Tokei logo" width="256" />
+  <img src="tokeilogo.png" alt="Tokei logo" width="420" style="max-width: 100%; height: auto;" />
 </p>
 
 Tokei is a standalone sync + report generator that combines:
