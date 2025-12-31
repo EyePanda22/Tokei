@@ -31,7 +31,7 @@ Output is written to `dist-installer\Tokei-Setup-<version>.exe`.
 
 Tokei can read a small SQLite file (`%TOKEI_USER_ROOT%\cache\gsm_live.sqlite`) exported by a GSM user plugin
 to capture "today" session totals even if GSM is closed at end-of-day. This is recommended because GSM's `gsm.db`
-may not reflect "live today" until GSM rolls up/persists the day.
+may not reflect "live today" until GSM rolls up/persists the day, and Tokei reconciles totals over a short window (3 days) to avoid double-counting.
 
 - Plugin template + install notes: `extras/gsm-plugin/README.md`
 

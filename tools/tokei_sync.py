@@ -921,13 +921,22 @@ def _read_gsm_db_lifetime_chars(con: sqlite3.Connection) -> int:
     return int(row[0] or 0)
 
 
-def _try_read_gsm_db_today_chars(
+def _detect_gsm_rollup_day_column(
     con: sqlite3.Connection,
-    *,
-    today: date,
-    tz: Any,
-) -> int | None:
-    # We need a "day" column to safely de-duplicate against gsm_live.sqlite for today.
+) -> tuple[str, str, bool] | None:
+    """
+    Detect the day/date column in GSM's daily_stats_rollup.
+
+    Returns:
+      (column_name, kind, is_likely_day_column)
+
+    kind:
+      - "iso_text": ISO-ish day strings (YYYY-MM-DD...) stored as TEXT
+      - "text": other TEXT values; still treat as "day-like" if the column name suggests it
+      - "ymd_int": YYYYMMDD integer values
+      - "unix_s": unix seconds
+      - "unix_ms": unix milliseconds
+    """
     cols = con.execute("PRAGMA table_info(daily_stats_rollup)").fetchall()
     if not cols:
         return None
@@ -936,43 +945,27 @@ def _try_read_gsm_db_today_chars(
     if "total_characters" not in col_types:
         return None
 
-    day_str = today.isoformat()
-
     preferred = ["day", "date", "report_day", "stat_day", "stat_date", "day_ts", "day_timestamp"]
     candidates = [c for c in preferred if c in col_types]
     candidates += [c for c in col_types.keys() if c not in candidates and ("day" in c.lower() or "date" in c.lower())]
 
     for day_col in candidates:
         tp = col_types.get(day_col, "").upper()
+        is_likely_day_col = ("day" in day_col.lower()) or ("date" in day_col.lower())
+
         if "TEXT" in tp:
             sample = con.execute(
                 f"SELECT {day_col} FROM daily_stats_rollup WHERE {day_col} IS NOT NULL LIMIT 1"
             ).fetchone()
             sample_s = str(sample[0]) if sample and sample[0] is not None else ""
             sample_s = sample_s.strip()
-            sample_day: date | None = None
             if sample_s:
-                # Many GSM tables use ISO day strings, but handle minor variations too.
                 try:
-                    sample_day = date.fromisoformat(sample_s[:10])
+                    date.fromisoformat(sample_s[:10])
+                    return (day_col, "iso_text", True)
                 except Exception:
-                    sample_day = None
-
-            row = con.execute(
-                f"""
-                SELECT SUM(CAST(total_characters AS INTEGER))
-                FROM daily_stats_rollup
-                WHERE {day_col} = ? OR {day_col} LIKE ?
-                """,
-                (day_str, day_str + "%"),
-            ).fetchone()
-            if row and row[0] is not None:
-                return int(row[0] or 0)
-            # If this looks like a real day column but there's simply no row yet for
-            # "today" (common when GSM hasn't rolled up), treat as 0 instead of "unknown".
-            if sample_day is not None:
-                return 0
-            continue
+                    pass
+            return (day_col, "text", is_likely_day_col)
 
         # Try numeric day columns.
         sample = con.execute(
@@ -985,43 +978,81 @@ def _try_read_gsm_db_today_chars(
         except Exception:
             continue
 
-        # yyyymmdd integer day keys
-        ymd_int = int(today.strftime("%Y%m%d"))
         if 20_000_101 <= v <= 20_991_231:
-            row = con.execute(
-                f"""
-                SELECT SUM(CAST(total_characters AS INTEGER))
-                FROM daily_stats_rollup
-                WHERE CAST({day_col} AS INTEGER) = ?
-                """,
-                (ymd_int,),
-            ).fetchone()
-            if row and row[0] is not None:
-                return int(row[0] or 0)
-            continue
-
-        # Unix timestamp seconds (or milliseconds) day keys
-        start_dt = datetime.combine(today, time.min, tzinfo=tz)
-        end_dt = start_dt + timedelta(days=1)
-        start_ts = start_dt.timestamp()
-        end_ts = end_dt.timestamp()
-
-        # Heuristic: very large values are likely milliseconds.
+            return (day_col, "ymd_int", True)
         if v > 10_000_000_000:  # ~year 2286 in seconds
-            start_ts *= 1000.0
-            end_ts *= 1000.0
+            return (day_col, "unix_ms", True)
+        return (day_col, "unix_s", True)
 
+    return None
+
+
+def _read_gsm_db_day_chars(
+    con: sqlite3.Connection,
+    *,
+    today: date,
+    tz: Any,
+    day_col: str,
+    kind: str,
+) -> int:
+    day_str = today.isoformat()
+
+    if kind in ("iso_text", "text"):
         row = con.execute(
             f"""
             SELECT SUM(CAST(total_characters AS INTEGER))
             FROM daily_stats_rollup
-            WHERE {day_col} >= ? AND {day_col} < ?
+            WHERE {day_col} = ? OR {day_col} LIKE ?
             """,
-            (start_ts, end_ts),
+            (day_str, day_str + "%"),
         ).fetchone()
-        if row and row[0] is not None:
-            return int(row[0] or 0)
+        # If there's no row for this day yet, treat as 0 (rollup missing).
+        return int(row[0] or 0) if row and row[0] is not None else 0
 
+    if kind == "ymd_int":
+        ymd_int = int(today.strftime("%Y%m%d"))
+        row = con.execute(
+            f"""
+            SELECT SUM(CAST(total_characters AS INTEGER))
+            FROM daily_stats_rollup
+            WHERE CAST({day_col} AS INTEGER) = ?
+            """,
+            (ymd_int,),
+        ).fetchone()
+        return int(row[0] or 0) if row and row[0] is not None else 0
+
+    # unix timestamps
+    start_dt = datetime.combine(today, time.min, tzinfo=tz)
+    end_dt = start_dt + timedelta(days=1)
+    start_ts = start_dt.timestamp()
+    end_ts = end_dt.timestamp()
+    if kind == "unix_ms":
+        start_ts *= 1000.0
+        end_ts *= 1000.0
+    row = con.execute(
+        f"""
+        SELECT SUM(CAST(total_characters AS INTEGER))
+        FROM daily_stats_rollup
+        WHERE {day_col} >= ? AND {day_col} < ?
+        """,
+        (start_ts, end_ts),
+    ).fetchone()
+    return int(row[0] or 0) if row and row[0] is not None else 0
+
+
+def _try_read_gsm_db_today_chars(
+    con: sqlite3.Connection,
+    *,
+    today: date,
+    tz: Any,
+) -> int | None:
+    detected = _detect_gsm_rollup_day_column(con)
+    if detected is None:
+        return None
+    day_col, kind, is_likely_day_col = detected
+    if not is_likely_day_col:
+        return None
+    return _read_gsm_db_day_chars(con, today=today, tz=tz, day_col=day_col, kind=kind)
     return None
 
 
@@ -1050,6 +1081,43 @@ def _read_gsm_live_today_chars(
         return None
 
 
+def _read_gsm_live_window_chars(
+    *,
+    root: Path,
+    days: list[date],
+    warnings: list[str] | None = None,
+) -> dict[date, int] | None:
+    live_db = root / "cache" / "gsm_live.sqlite"
+    if not live_db.exists():
+        return None
+
+    days_by_iso = {d.isoformat(): d for d in days}
+    placeholders = ", ".join(["?"] * len(days_by_iso))
+    sql = f"""
+      SELECT day, COALESCE(SUM(total_chars), 0)
+      FROM gsm_sessions
+      WHERE day IN ({placeholders})
+      GROUP BY day
+    """
+
+    totals: dict[date, int] = {d: 0 for d in days}
+    try:
+        con = sqlite3.connect(f"file:{live_db}?mode=ro", uri=True)
+        try:
+            rows = con.execute(sql, tuple(days_by_iso.keys())).fetchall()
+        finally:
+            con.close()
+        for day_s, total in rows:
+            d = days_by_iso.get(str(day_s))
+            if d is not None:
+                totals[d] = int(total or 0)
+        return totals
+    except sqlite3.Error as e:
+        if warnings is not None:
+            warnings.append(f"Failed to query GSM live DB: {live_db} ({type(e).__name__}).")
+        return None
+
+
 def _read_gsm_chars(
     cfg: Config,
     *,
@@ -1058,6 +1126,10 @@ def _read_gsm_chars(
     tz: Any,
     warnings: list[str] | None = None,
 ) -> int:
+    # Window used to reconcile gsm.db rollup with gsm_live.sqlite.
+    # We replace gsm.db totals for these days with max(db, live) to avoid double-counting.
+    GSM_LIVE_WINDOW_DAYS = 3
+
     db_path = _resolve_gsm_db_path(cfg, warnings=warnings)
     if db_path is None:
         return 0
@@ -1065,25 +1137,36 @@ def _read_gsm_chars(
         con = sqlite3.connect(str(db_path))
         try:
             lifetime_db = _read_gsm_db_lifetime_chars(con)
-            today_db = _try_read_gsm_db_today_chars(con, today=today, tz=tz)
-            today_live = _read_gsm_live_today_chars(root=root, today=today, warnings=warnings)
+            day_col_info = _detect_gsm_rollup_day_column(con)
+            days = [today - timedelta(days=(GSM_LIVE_WINDOW_DAYS - 1 - i)) for i in range(GSM_LIVE_WINDOW_DAYS)]
 
-            if today_db is None:
+            if day_col_info is None or not day_col_info[2]:
+                today_live = _read_gsm_live_today_chars(root=root, today=today, warnings=warnings)
                 if today_live is not None and warnings is not None:
                     warnings.append(
                         "GSM live session export detected, but could not locate a usable day column in gsm.db daily_stats_rollup to de-duplicate; using gsm.db lifetime as-is."
                     )
                 return int(lifetime_db)
 
-            if today_live is None:
+            live_totals = _read_gsm_live_window_chars(root=root, days=days, warnings=warnings)
+            if live_totals is None:
                 return int(lifetime_db)
 
-            if warnings is not None and today_live > today_db:
-                warnings.append(
-                    f"GSM live sessions exceed gsm.db rollup for {today.isoformat()}: live={today_live}, db={today_db}. Using live sessions for today."
-                )
+            day_col, kind, _is_likely_day_col = day_col_info
+            db_totals = {d: _read_gsm_db_day_chars(con, today=d, tz=tz, day_col=day_col, kind=kind) for d in days}
 
-            corrected = int(lifetime_db - int(today_db) + max(int(today_db), int(today_live)))
+            db_window = sum(db_totals.values())
+            merged_totals = {d: max(db_totals[d], live_totals[d]) for d in days}
+            merged_window = sum(merged_totals.values())
+
+            if warnings is not None:
+                for d in days:
+                    if live_totals[d] > db_totals[d]:
+                        warnings.append(
+                            f"GSM live sessions exceed gsm.db rollup for {d.isoformat()}: live={live_totals[d]}, db={db_totals[d]}. Using live sessions for that day."
+                        )
+
+            corrected = int(lifetime_db - int(db_window) + int(merged_window))
             return corrected
         finally:
             con.close()
