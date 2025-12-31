@@ -7,7 +7,14 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## Unreleased
 
 ### Added
-- Optional Ttsu Reader support: ingest novel characters read from `statistics_*.json` via `config.json -> ttsu.data_dir`, and include it in the Reading totals.
+
+### Fixed
+
+## 0.2.0 - 2025-12-31
+
+### Added
+- Ttsu Reader support: ingest novel characters read from `statistics_*.json` via `config.json -> ttsu.data_dir`, include it in the Reading card, and add onboarding prompts in both `Tokei.mjs` and `Setup-Tokei.bat`.
+- Version bump tooling: `npm run bump:{patch,minor,major}` to keep `package.json`, `installer/Tokei.iss`, `Tokei.mjs`, and the Windows EXE version resource in sync.
 
 ### Fixed
 
