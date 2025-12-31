@@ -3,6 +3,11 @@
   "version": "0.1.2",
   "private": true,
   "type": "module",
+  "scripts": {
+    "bump:patch": "node tools/bump_version.mjs patch",
+    "bump:minor": "node tools/bump_version.mjs minor",
+    "bump:major": "node tools/bump_version.mjs major"
+  },
   "dependencies": {
     "puppeteer": "^24.34.0"
   }

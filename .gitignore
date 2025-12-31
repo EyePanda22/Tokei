@@ -16,3 +16,6 @@ config.json
 
 dev-run.bat
 /.devdata/
+
+# Local-only reference notes
+CHEATSHEET.md

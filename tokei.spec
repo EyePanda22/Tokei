@@ -63,6 +63,7 @@ exe = EXE(
     exclude_binaries=True,
     name="Tokei",
     icon=str(project_root / "assets" / "tokei.ico"),
+    version=str(project_root / "tools" / "windows_version_info.txt"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
