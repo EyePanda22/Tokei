@@ -1,7 +1,7 @@
 ; Inno Setup script for Tokei (app-only installer)
 
 #define MyAppName "Tokei"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.2.1"
 #define MyAppPublisher "Tokei"
 #define MyAppExeName "Tokei.exe"
 #define MyAppId "{{C8B7A6E4-5E8C-4D63-9A41-8A6B9B99A5B2}}"
