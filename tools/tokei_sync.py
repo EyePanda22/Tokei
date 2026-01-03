@@ -42,6 +42,8 @@ class Config:
     ttsu_data_dir: str
     gsm_db_path: str
     phase2_csv_rule_id: str
+    anki_snapshot_enabled: bool
+    anki_snapshot_output_dir: str
 
 
 class TogglMinStartDateError(RuntimeError):
@@ -168,17 +170,20 @@ def _resolve_hashi_known_words_db(cfg: Config) -> Path | None:
         return None
 
     output_dir = "hashi_exports"
-    rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
-    if rules_path.exists():
-        try:
-            parsed = json.loads(rules_path.read_text(encoding="utf-8"))
-            settings = parsed.get("settings") if isinstance(parsed, dict) else None
-            if isinstance(settings, dict):
-                od = settings.get("output_dir")
-                if isinstance(od, str) and od.strip():
-                    output_dir = od.strip()
-        except Exception:
-            pass
+    if cfg.anki_snapshot_enabled and cfg.anki_snapshot_output_dir.strip():
+        output_dir = cfg.anki_snapshot_output_dir.strip()
+    else:
+        rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
+        if rules_path.exists():
+            try:
+                parsed = json.loads(rules_path.read_text(encoding="utf-8"))
+                settings = parsed.get("settings") if isinstance(parsed, dict) else None
+                if isinstance(settings, dict):
+                    od = settings.get("output_dir")
+                    if isinstance(od, str) and od.strip():
+                        output_dir = od.strip()
+            except Exception:
+                pass
 
     base = Path(output_dir)
     if not base.is_absolute():
@@ -476,6 +481,10 @@ def _load_config(path: Path) -> Config:
     phase2 = raw.get("phase2") or {}
     phase2_csv_rule_id = str(phase2.get("csv_rule_id") or "default").strip() or "default"
 
+    anki_snapshot = raw.get("anki_snapshot") or {}
+    anki_snapshot_enabled = bool(anki_snapshot.get("enabled", False))
+    anki_snapshot_output_dir = str(anki_snapshot.get("output_dir") or "hashi_exports").strip() or "hashi_exports"
+
     return Config(
         anki_profile=anki_profile,
         timezone=tz,
@@ -490,6 +499,8 @@ def _load_config(path: Path) -> Config:
         ttsu_data_dir=ttsu_data_dir,
         gsm_db_path=gsm_db_path,
         phase2_csv_rule_id=phase2_csv_rule_id,
+        anki_snapshot_enabled=anki_snapshot_enabled,
+        anki_snapshot_output_dir=anki_snapshot_output_dir,
     )
 
 
@@ -834,17 +845,20 @@ def _read_hashi_stats(cfg: Config, warnings: list[str] | None = None) -> tuple[i
 
     profile_dir = Path(appdata) / "Anki2" / cfg.anki_profile
     output_dir = "hashi_exports"
-    rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
-    if rules_path.exists():
-        try:
-            parsed = json.loads(rules_path.read_text(encoding="utf-8"))
-            settings = parsed.get("settings") if isinstance(parsed, dict) else None
-            if isinstance(settings, dict):
-                od = settings.get("output_dir")
-                if isinstance(od, str) and od.strip():
-                    output_dir = od.strip()
-        except Exception:
-            pass
+    if cfg.anki_snapshot_enabled and cfg.anki_snapshot_output_dir.strip():
+        output_dir = cfg.anki_snapshot_output_dir.strip()
+    else:
+        rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
+        if rules_path.exists():
+            try:
+                parsed = json.loads(rules_path.read_text(encoding="utf-8"))
+                settings = parsed.get("settings") if isinstance(parsed, dict) else None
+                if isinstance(settings, dict):
+                    od = settings.get("output_dir")
+                    if isinstance(od, str) and od.strip():
+                        output_dir = od.strip()
+            except Exception:
+                pass
 
     stats_path = Path(output_dir) / "anki_stats_snapshot.json"
     if not stats_path.is_absolute():

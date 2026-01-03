@@ -29,5 +29,20 @@
   },
   "phase2": {
     "csv_rule_id": "default"
+  },
+  "anki_snapshot": {
+    "enabled": false,
+    "stats_range_days": null,
+    "output_dir": "hashi_exports",
+    "rules": [
+      {
+        "rule_id": "Mining",
+        "deck_paths": ["Japanese::Mining"],
+        "include_subdecks": true,
+        "note_types": ["Japanese Vocabulary"],
+        "target_field": "Expression",
+        "mature_interval_days": 21
+      }
+    ]
   }
 }

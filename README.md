@@ -13,7 +13,7 @@ Note: Tokei currently runs as a console app (CLI). A UI is planned.
 Tokei is a standalone sync + report generator that combines:
 
 - Toggl (API token) for lifetime + today immersion (with description breakdown)
-- Hashi (hashi_exports/anki_stats_snapshot.json) for Anki retention + review totals
+- Anki stats (either built-in snapshot exporter or the Hashi add-on) for retention + review totals
 - Mokuro (volume-data.json) for manga characters read
 - Ttsu Reader (ttu-reader-data/statistics_*.json) for novel characters read
 - GameSentenceMiner (gsm.db) for GSM characters read
@@ -36,10 +36,12 @@ It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
 ### Quick start (most users)
 
 1) Install Node.js 18+
-2) Install the Hashi Anki add-on (required for word count + Anki stats)
-   - In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
-   - Link: https://ankiweb.net/shared/info/1132527238
-3) Run Tokei from the Start Menu shortcut
+2) Run Tokei from the Start Menu shortcut
+3) During first run, use the built-in Anki snapshot setup to select decks + fields for Anki retention/review stats
+
+Optional (advanced): install the Hashi Anki add-on instead of using built-in snapshots:
+- In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
+- Link: https://ankiweb.net/shared/info/1132527238
 
 Tokei will generate HTML reports by default. PNG reports require additional setup (see below).
 
@@ -98,6 +100,9 @@ This explicit setup is intentional for the alpha release to maximize PNG reliabi
 - `config.json` is the live config used by Tokei.
 - `config.example.json` is documentation only (not loaded at runtime).
 - Field types are implied by the example values; keep the same types when editing `config.json`.
+- Anki snapshot:
+  - `anki_snapshot.enabled`: if true, Tokei uses the built-in Anki snapshot exporter instead of Hashi HTTP exports.
+  - `anki_snapshot.rules`: list of deck/field rules (supports multiple decks and note types per rule); see `config.example.json`.
 - Phase 2:
   - Optional CSV ingest: any `*.csv` in `data/` (first column only; one or more header rows allowed). If no CSVs exist in `data/`, it falls back to `data/csv/known.csv` and `known.csv` for compatibility.
   - Optional config: `phase2.csv_rule_id` (defaults to `default`).
@@ -111,10 +116,9 @@ Troubleshooting:
 
 Tokei reads from these external tools but does not modify them:
 
-- Hashi (Anki add-on)
-  - Install via Anki: `Tools > Add-ons > Get Add-ons...` -> `1132527238` (https://ankiweb.net/shared/info/1132527238)
-  - Reads hashi_exports/anki_stats_snapshot.json from your Anki profile
-  - If missing, Tokei warns and continues
+- Anki (two supported snapshot producers)
+  - Built-in snapshot exporter (recommended): reads your Anki profile `collection.anki2` and writes Hashi-compatible exports under `hashi_exports/` (configurable)
+  - Hashi (Anki add-on, optional): writes the same exports under `hashi_exports/` (configurable)
 - GSM (Game Sentence Miner)
   - Reads gsm.db (auto path uses %APPDATA%\GameSentenceMiner\gsm.db)
   - If missing, Tokei warns and continues
@@ -129,7 +133,9 @@ Tokei reads from these external tools but does not modify them:
 
 - output_dir in config.json can be absolute or relative to the Tokei folder.
 - Theme previews are available as PNGs in samples/.
-- For fresh Anki stats, Anki must be running; Tokei triggers a Hashi export via http://127.0.0.1:8766/export before reading the file.
+- For fresh Anki stats:
+  - If `anki_snapshot.enabled=true`, Tokei exports from `collection.anki2` before reading the file.
+  - Otherwise, Tokei triggers a Hashi export via http://127.0.0.1:8766/export before reading the file.
 - Toggl /me/time_entries may limit how far back it can query. Use toggl.baseline_hours to account for older time if needed.
 
 

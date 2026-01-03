@@ -81,14 +81,29 @@ function resolveHashiStatsPath(cfg) {
   // Default location
   let outputDir = "hashi_exports";
 
-  // If Hashi is installed, prefer its configured output_dir.
+  // If Tokei is acting as the snapshot producer, prefer its configured output_dir.
+  let usingInternalProducer = false;
   try {
-    const rulesPath = path.join(appdata, "Anki2", "addons21", "Hashi", "rules.json");
-    const raw = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
-    const cfgOut = raw?.settings?.output_dir;
-    if (typeof cfgOut === "string" && cfgOut.trim()) outputDir = cfgOut.trim();
+    const ankiSnap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : null;
+    if (ankiSnap && ankiSnap.enabled === true) {
+      const od = ankiSnap.output_dir;
+      if (typeof od === "string" && od.trim()) outputDir = od.trim();
+      usingInternalProducer = true;
+    }
   } catch {
     // ignore
+  }
+
+  // If Hashi is installed, prefer its configured output_dir.
+  if (!usingInternalProducer) {
+    try {
+      const rulesPath = path.join(appdata, "Anki2", "addons21", "Hashi", "rules.json");
+      const raw = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
+      const cfgOut = raw?.settings?.output_dir;
+      if (typeof cfgOut === "string" && cfgOut.trim()) outputDir = cfgOut.trim();
+    } catch {
+      // ignore
+    }
   }
 
   if (path.isAbsolute(outputDir)) return path.join(outputDir, "anki_stats_snapshot.json");
@@ -130,6 +145,37 @@ async function refreshHashiExport(cfg) {
   let baseUrl = portUrl(port);
   const statsPath = resolveHashiStatsPath(cfg);
   const beforeMtime = statsPath && fs.existsSync(statsPath) ? fs.statSync(statsPath).mtimeMs : 0;
+
+  const ankiSnap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
+  if (ankiSnap.enabled === true) {
+    const exportScript = path.join(__dirname, "tools", "tokei_anki_export.py");
+    const pyCmd = getPythonCommand();
+    const pyArgsPrefix = getPythonArgsPrefix();
+    const pyArgs = [...pyArgsPrefix, exportScript, "--trigger", "tokei"];
+    const r = runPythonLogged("tokei_anki_export.py", pyCmd, pyArgs, { cwd: appRoot });
+    if (r.error) throw r.error;
+    if (r.status !== 0) {
+      if (!requireFresh) return;
+      const err = (r.stderr || "").trim();
+      throw makePythonProcessError(`tokei_anki_export.py failed (code ${r.status})\n${err}`, r.status);
+    }
+
+    if (!statsPath) return;
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (fs.existsSync(statsPath)) {
+        const mtime = fs.statSync(statsPath).mtimeMs;
+        if (mtime > beforeMtime) return;
+      }
+      await sleep(250);
+    }
+
+    if (requireFresh) {
+      throw new Error(`Anki snapshot export did not update at ${statsPath}.`);
+    }
+    return;
+  }
 
   try {
     const ping = await httpGetJson(`${baseUrl}/ping`, 1500);
@@ -301,6 +347,18 @@ function askYesNo(prompt) {
   });
 }
 
+function askYesNoDefault(prompt, defaultValue) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      const v = (answer || "").trim().toLowerCase();
+      if (v === "") return resolve(Boolean(defaultValue));
+      resolve(v === "y" || v === "yes");
+    });
+  });
+}
+
 function askDuplicateReportAction(prompt) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
@@ -340,6 +398,188 @@ function promptText(prompt, defaultValue = "") {
       resolve(trimmed === "" ? defaultValue : trimmed);
     });
   });
+}
+
+function parseIndexList(input, max) {
+  const raw = String(input || "").trim();
+  if (!raw) return [];
+  const parts = raw.split(/[, ]+/).map((p) => p.trim()).filter(Boolean);
+  const out = new Set();
+  for (const p of parts) {
+    const n = Number(p);
+    if (!Number.isFinite(n)) continue;
+    const idx = Math.trunc(n);
+    if (idx >= 1 && idx <= max) out.add(idx);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+function intersectArrays(arrays) {
+  if (!arrays.length) return [];
+  let s = new Set(arrays[0]);
+  for (let i = 1; i < arrays.length; i++) {
+    const next = new Set(arrays[i]);
+    s = new Set([...s].filter((x) => next.has(x)));
+  }
+  return [...s].sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+async function configureAnkiSnapshotWizard(base) {
+  console.log("");
+  console.log("=== Anki Snapshot Setup (recommended) ===");
+  console.log("");
+  console.log("This config replaces the Hashi add-on by exporting the same files from your Anki profile.");
+  console.log("");
+
+  const enable = await askYesNoDefault("Set up built-in Anki snapshot export now? (Y/n) ", true);
+  if (!enable) {
+    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] };
+    base.anki_snapshot.enabled = false;
+    console.log("");
+    console.log("Skipping Anki snapshot setup. Tokei will use the Hashi add-on if it is installed and reachable.");
+    return base;
+  }
+
+  const pyCmd = getPythonCommand();
+  const pyArgsPrefix = getPythonArgsPrefix();
+  const discoverScript = path.join(__dirname, "tools", "tokei_anki_export.py");
+  const profile = typeof base.anki_profile === "string" && base.anki_profile.trim() ? base.anki_profile.trim() : "User 1";
+  const r = runPythonLogged("tokei_anki_export.py --discover", pyCmd, [...pyArgsPrefix, discoverScript, "--discover", "--profile", profile], { cwd: appRoot });
+  if (r.error) throw r.error;
+  const payloadText = (r.stdout || "").trim();
+  let payload = null;
+  try {
+    payload = JSON.parse(payloadText);
+  } catch {
+    payload = null;
+  }
+  if (!payload || payload.ok !== true) {
+    const msg = payload?.error ? String(payload.error) : (r.stderr || "").trim() || "unknown error";
+    console.warn("Could not discover Anki decks/note types:", msg);
+    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] };
+    base.anki_snapshot.enabled = false;
+    console.log("");
+    console.log("Tokei will fall back to the Hashi add-on for Anki stats if available.");
+    console.log("If you want to use built-in snapshots, rerun setup when Anki is idle/unlocked or try again later.");
+    return base;
+  }
+
+  const decks = Array.isArray(payload.decks) ? payload.decks : [];
+  const noteTypes = Array.isArray(payload.note_types) ? payload.note_types : [];
+  const noteTypeById = new Map(noteTypes.map((nt) => [Number(nt.id), nt]));
+
+  if (!decks.length) {
+    console.warn("No decks found in the selected Anki profile.");
+    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] };
+    base.anki_snapshot.enabled = false;
+    return base;
+  }
+
+  console.log("");
+  console.log("Pick one or more rules. Each rule can include multiple decks, and uses one target field.");
+  console.log("");
+
+  const rules = [];
+  while (true) {
+    console.log("");
+    console.log("Deck list:");
+    decks.forEach((d, i) => console.log(`  ${i + 1}) ${d.name}`));
+    console.log("");
+    const deckIdxRaw = await promptText("Enter deck numbers (comma-separated)", "");
+    const chosenDeckIdx = parseIndexList(deckIdxRaw, decks.length);
+    if (!chosenDeckIdx.length) {
+      const ok = await askYesNo("No decks selected. Cancel Anki snapshot setup? (y/N) ");
+      if (ok) break;
+      continue;
+    }
+    const deckPaths = chosenDeckIdx.map((i) => String(decks[i - 1].name));
+    const includeSubdecks = await askYesNo("Include subdecks for these deck paths? (Y/n) ");
+    const includeSubdecksFinal = includeSubdecks !== false;
+
+    const midSet = new Set();
+    for (const i of chosenDeckIdx) {
+      const ids = decks[i - 1].note_type_ids || [];
+      for (const mid of ids) midSet.add(Number(mid));
+    }
+    const midsInDecks = [...midSet].filter((v) => Number.isFinite(v));
+    const noteTypeNamesInDecks = midsInDecks.map((mid) => noteTypeById.get(mid)?.name).filter(Boolean);
+
+    let chosenNoteTypes = [];
+    let fieldsIntersection = [];
+    if (noteTypeNamesInDecks.length) {
+      const fieldArrays = midsInDecks.map((mid) => noteTypeById.get(mid)?.fields).filter((a) => Array.isArray(a));
+      fieldsIntersection = intersectArrays(fieldArrays);
+    }
+
+    if (!fieldsIntersection.length) {
+      console.log("");
+      console.log("No common field found across the note types used in these deck(s).");
+      if (noteTypeNamesInDecks.length) {
+        console.log("You can restrict note types to increase overlap.");
+        console.log("");
+        noteTypeNamesInDecks.forEach((n, i) => console.log(`  ${i + 1}) ${n}`));
+        const ntIdxRaw = await promptText("Enter note type numbers to include (comma-separated), or press Enter to skip", "");
+        const idxs = parseIndexList(ntIdxRaw, noteTypeNamesInDecks.length);
+        chosenNoteTypes = idxs.length ? idxs.map((i) => noteTypeNamesInDecks[i - 1]) : [];
+        const mids = chosenNoteTypes.length
+          ? midsInDecks.filter((mid) => chosenNoteTypes.includes(noteTypeById.get(mid)?.name))
+          : midsInDecks;
+        const fieldArrays2 = mids.map((mid) => noteTypeById.get(mid)?.fields).filter((a) => Array.isArray(a));
+        fieldsIntersection = intersectArrays(fieldArrays2);
+      }
+    }
+
+    let targetField = "";
+    if (fieldsIntersection.length) {
+      console.log("");
+      console.log("Common fields (choose one):");
+      const show = fieldsIntersection.slice(0, 40);
+      show.forEach((f, i) => console.log(`  ${i + 1}) ${f}`));
+      if (fieldsIntersection.length > show.length) console.log(`  ... (+${fieldsIntersection.length - show.length} more)`);
+      const fieldChoiceRaw = await promptText("Field number (or type a field name)", String(1));
+      const n = Number(fieldChoiceRaw);
+      if (Number.isFinite(n) && n >= 1 && n <= show.length) {
+        targetField = show[Math.trunc(n) - 1];
+      } else {
+        targetField = String(fieldChoiceRaw || "").trim();
+      }
+    } else {
+      console.log("");
+      targetField = await promptText("Target field name (must exist on selected note types)", "");
+    }
+
+    const defaultRuleId = deckPaths[0].split("::").slice(-1)[0] || "rule_1";
+    const ruleId = await promptText("Rule ID", defaultRuleId);
+    rules.push({
+      rule_id: String(ruleId || defaultRuleId),
+      deck_paths: deckPaths,
+      include_subdecks: includeSubdecksFinal,
+      note_types: chosenNoteTypes,
+      target_field: String(targetField || "").trim(),
+      mature_interval_days: 21,
+    });
+
+    const addMore = await askYesNo("Add another rule? (y/N) ");
+    if (!addMore) break;
+  }
+
+  base.anki_snapshot = base.anki_snapshot && typeof base.anki_snapshot === "object" ? base.anki_snapshot : {};
+  base.anki_snapshot.enabled = rules.length > 0;
+  base.anki_snapshot.output_dir =
+    typeof base.anki_snapshot.output_dir === "string" && base.anki_snapshot.output_dir.trim()
+      ? base.anki_snapshot.output_dir.trim()
+      : "hashi_exports";
+  base.anki_snapshot.stats_range_days =
+    typeof base.anki_snapshot.stats_range_days === "number" ? base.anki_snapshot.stats_range_days : null;
+  base.anki_snapshot.rules = rules;
+
+  console.log("");
+  if (base.anki_snapshot.enabled) {
+    console.log(`Anki snapshot enabled with ${rules.length} rule(s).`);
+  } else {
+    console.log("Anki snapshot disabled (no rules).");
+  }
+  return base;
 }
 
 function parseHmsToHours(value) {
@@ -432,6 +672,12 @@ async function ensureConfigOrSetup() {
     mokuro: { volume_data_path: "" },
     ttsu: { data_dir: "" },
     gsm: { db_path: "auto" },
+    anki_snapshot: {
+      enabled: false,
+      stats_range_days: null,
+      output_dir: "hashi_exports",
+      rules: [],
+    },
   };
   base.output_dir = getDefaultOutputDir();
   if (!base.theme) base.theme = DEFAULT_THEME;
@@ -537,6 +783,8 @@ async function ensureConfigOrSetup() {
 
   console.log("");
   base.anki_profile = await promptText("Anki profile name", base.anki_profile || "User 1");
+
+  await configureAnkiSnapshotWizard(base);
 
   console.log("");
   console.log("Mokuro (optional): to include manga stats, paste the full path to your volume-data.json file.");
