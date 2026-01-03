@@ -10,14 +10,22 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Fixed
 
-## 0.3.0 - 2026-01-03
+## 0.3.1 - 2026-01-03
+
+### Added
+- Setup-first local UI (`ui/`) for editing config, validating Anki/Python/Puppeteer, and running the pipeline.
+- Electron wrapper + Windows per-user installer config (electron-builder) for distributing the UI (`electron/` + `npm run dist:win`).
+- Electron builds bundle Puppeteer browser binaries via `tools/prep_puppeteer_cache.mjs` so PNG rendering works without user-side `npm install`.
+- `Tokei-UI.bat` launcher for opening the UI on Windows.
+- Safer GSM live-session plugin install: `extras/gsm-plugin/tokei_live_sync.py` helper + `extras/gsm-plugin/plugins.py` shim that wraps an existing `main()`.
+
+### Fixed
+
+## 0.3.0 - 2026-01-02
 
 ### Added
 - Built-in Anki snapshot exporter (`tools/tokei_anki_export.py`) that writes Hashi-compatible `anki_stats_snapshot.json` and `known_words.sqlite` from `collection.anki2`.
 - First-run Anki snapshot setup wizard in `Tokei.mjs` that builds `config.json -> anki_snapshot.rules` (supports multiple decks per rule).
-- Setup-first local UI (`ui/`) for editing config, validating Anki/Python/Puppeteer, and running the pipeline.
-- Electron wrapper + Windows per-user installer config (electron-builder) for distributing the UI (`electron/` + `npm run dist:win`).
-- Electron builds bundle Puppeteer browser binaries via `tools/prep_puppeteer_cache.mjs` so PNG rendering works without user-side `npm install`.
 
 ## 0.2.0 - 2025-12-31
 
