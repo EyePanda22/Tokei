@@ -24,6 +24,10 @@ It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
 - PNG:  output/Tokei Report <report_no>.png
 - Warnings: output/Tokei Report <report_no> WARNINGS.txt (only if warnings exist)
 
+The UI also maintains:
+- `cache/latest_sync.json`: latest sync snapshot (safe to refresh multiple times per day)
+- `cache/latest_stats.json`: latest report snapshot (includes `report_no`, used to open latest HTML)
+
 ## Theme samples
 
 <p>
@@ -40,6 +44,10 @@ It caches merged snapshots into cache/tokei_cache.sqlite, then renders:
 3) During first run, use the built-in Anki snapshot setup to select decks + fields for Anki retention/review stats
 4) Optional: run `Tokei-UI.bat` any time to edit config, validate Anki export, test PNG rendering, and run reports (web UI)
    - Dev/electron: `npm run ui:electron`
+
+In the UI Run tab:
+- Use **Sync** to refresh caches and update `latest_sync.json` (no report generated)
+- Use **Generate report** to render HTML/PNG; by default it syncs first, with a checkbox to render from the latest sync snapshot
 
 Optional (advanced): install the Hashi Anki add-on instead of using built-in snapshots:
 - In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
@@ -133,6 +141,10 @@ Tokei reads from these external tools but does not modify them:
   - If `anki_snapshot.enabled=true`, Tokei exports from `collection.anki2` before reading the file.
   - Otherwise, Tokei triggers a Hashi export via http://127.0.0.1:8766/export before reading the file.
 - Toggl /me/time_entries may limit how far back it can query. Use toggl.baseline_hours to account for older time if needed.
+
+Advanced CLI flags:
+- `--sync-only`: refresh caches + write `cache/latest_sync.json` (no report render)
+- `--no-sync`: generate a report using `cache/latest_sync.json` without refreshing sources (run Sync first)
 
 
 ## Build Tokei.exe (app-only)
