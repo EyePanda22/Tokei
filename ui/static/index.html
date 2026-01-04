@@ -14,6 +14,7 @@
       </div>
       <nav>
         <button id="tab-setup" class="tab active">Setup</button>
+        <button id="tab-sources" class="tab">Sources</button>
         <button id="tab-run" class="tab">Run</button>
         <button id="tab-logs" class="tab">Logs</button>
       </nav>
@@ -120,30 +121,6 @@
           </div>
 
           <div class="card full">
-            <h2>Sources: Reading section</h2>
-            <div class="hint">
-              Controls whether reading sources are included in the report’s Reading card. If all are disabled, the Reading card is hidden.
-            </div>
-            <div class="row">
-              <label class="check">
-                <input id="mokuro-enabled" type="checkbox" />
-                Enable Mokuro (manga characters)
-              </label>
-              <label class="check">
-                <input id="ttsu-enabled" type="checkbox" />
-                Enable Ttsu Reader (novel characters)
-              </label>
-              <label class="check">
-                <input id="gsm-enabled" type="checkbox" />
-                Enable GSM (game characters)
-              </label>
-            </div>
-            <div class="hint">
-              These toggles do not affect GSM live sessions install; they only control inclusion in report totals/sections.
-            </div>
-          </div>
-
-          <div class="card full">
             <h2>GSM live sessions (optional)</h2>
             <div class="hint">
               GSM typically has a single <code>plugins.py</code>. If you already have one, paste the Tokei plugin code into your existing file (don't overwrite unless you intend to).
@@ -179,6 +156,73 @@
               <div id="puppeteer-status" class="status"></div>
             </div>
             <div class="hint">Writes a small test HTML into <code>cache/</code> and a PNG into <code>output/</code>.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-sources" class="panel">
+        <div class="grid">
+          <div class="card full">
+            <h2>Sources</h2>
+            <div class="hint">
+              Enable/disable sources and jump to your tools. Disabled sources are excluded from report totals/sections.
+            </div>
+          </div>
+
+          <div class="card full">
+            <h2>Mokuro (manga)</h2>
+            <div class="row">
+              <label class="check">
+                <input id="mokuro-enabled" type="checkbox" />
+                Enabled
+              </label>
+              <button id="mokuro-open" class="btn">Open reader.mokuro.app</button>
+              <div id="mokuro-status" class="status"></div>
+            </div>
+            <div class="hint">Uses your configured <code>mokuro.volume_data_path</code> when enabled.</div>
+          </div>
+
+          <div class="card full">
+            <h2>Ttsu Reader (novels)</h2>
+            <div class="row">
+              <label class="check">
+                <input id="ttsu-enabled" type="checkbox" />
+                Enabled
+              </label>
+              <button id="ttsu-open" class="btn">Open reader.ttsu.app</button>
+              <div id="ttsu-status" class="status"></div>
+            </div>
+            <div class="hint">Uses your configured <code>ttsu.data_dir</code> when enabled.</div>
+          </div>
+
+          <div class="card full">
+            <h2>GameSentenceMiner (GSM)</h2>
+            <div class="row">
+              <label class="check">
+                <input id="gsm-enabled" type="checkbox" />
+                Enabled
+              </label>
+              <button id="gsm-launch" class="btn">Launch GSM</button>
+              <button id="gsm-open-folder2" class="btn">Open GSM folder</button>
+              <div id="gsm-launch-status" class="status"></div>
+            </div>
+            <div class="hint">
+              Launch uses the default install path under <code>%LOCALAPPDATA%\\Programs\\gamesentenceminer</code>.
+            </div>
+          </div>
+
+          <div class="card full">
+            <h2>Known CSV</h2>
+            <div class="row">
+              <button id="known-import" class="btn primary">Import known.csv…</button>
+              <button id="known-open-folder" class="btn">Open folder</button>
+              <button id="known-open-file" class="btn">Open file</button>
+              <div id="known-status" class="status"></div>
+              <input id="known-file" type="file" accept=".csv,text/csv" hidden />
+            </div>
+            <div class="hint">
+              Import copies your CSV into <code>data/known.csv</code> under your Tokei user root for Phase 2 ingestion.
+            </div>
           </div>
         </div>
       </section>

@@ -24,7 +24,7 @@ let activeRuleRow = null;
 let discoveredAnki = null;
 
 function selectTab(name) {
-  for (const t of ["setup", "run", "logs"]) {
+  for (const t of ["setup", "sources", "run", "logs"]) {
     $(`tab-${t}`).classList.toggle("active", t === name);
     $(`panel-${t}`).classList.toggle("active", t === name);
   }
@@ -322,6 +322,8 @@ async function loadConfig() {
   const gsmDbPath = typeof gsm.db_path === "string" ? gsm.db_path.trim() : "auto";
   const gsmDefaultEnabled = gsmDbPath.toLowerCase() !== "off";
   $("gsm-enabled").checked = typeof gsm.enabled === "boolean" ? gsm.enabled : gsmDefaultEnabled;
+  setStatus($("mokuro-status"), $("mokuro-enabled").checked ? "Enabled" : "Disabled", $("mokuro-enabled").checked ? "good" : null);
+  setStatus($("ttsu-status"), $("ttsu-enabled").checked ? "Enabled" : "Disabled", $("ttsu-enabled").checked ? "good" : null);
 
   setVisible($("anki-advanced"), false);
   populateRulesTable(Array.isArray(snap.rules) ? snap.rules : []);
@@ -343,6 +345,9 @@ async function saveConfig(currentCfg) {
   cfg.ttsu.enabled = $("ttsu-enabled").checked;
   cfg.gsm = cfg.gsm && typeof cfg.gsm === "object" ? cfg.gsm : {};
   cfg.gsm.enabled = $("gsm-enabled").checked;
+
+  setStatus($("mokuro-status"), $("mokuro-enabled").checked ? "Enabled" : "Disabled", $("mokuro-enabled").checked ? "good" : null);
+  setStatus($("ttsu-status"), $("ttsu-enabled").checked ? "Enabled" : "Disabled", $("ttsu-enabled").checked ? "good" : null);
 
   setStatus($("config-status"), "Saving...", null);
   const r = await api("POST", "/api/config", cfg);
@@ -814,6 +819,7 @@ let currentConfig = null;
 
 function wireUi() {
   $("tab-setup").addEventListener("click", () => selectTab("setup"));
+  $("tab-sources").addEventListener("click", () => selectTab("sources"));
   $("tab-run").addEventListener("click", () => selectTab("run"));
   $("tab-logs").addEventListener("click", () => selectTab("logs"));
 
@@ -855,6 +861,50 @@ function wireUi() {
 
   $("open-html").addEventListener("click", async () => {
     await api("POST", "/api/open-latest-html", {});
+  });
+
+  $("mokuro-open").addEventListener("click", async () => {
+    await api("POST", "/api/open", { target: "https://reader.mokuro.app" });
+  });
+  $("ttsu-open").addEventListener("click", async () => {
+    await api("POST", "/api/open", { target: "https://reader.ttsu.app" });
+  });
+  $("gsm-open-folder2").addEventListener("click", async () => {
+    await api("POST", "/api/gsm/open-folder", {});
+  });
+  $("gsm-launch").addEventListener("click", async () => {
+    setStatus($("gsm-launch-status"), "Launching...", null);
+    const r = await api("POST", "/api/gsm/launch", {});
+    if (r.ok) setStatus($("gsm-launch-status"), `Launched: ${r.exePath}`, "good");
+    else if (r.error === "gsm_exe_not_found" && r.openedFolder) setStatus($("gsm-launch-status"), `GSM not found; opened: ${r.openedFolder}`, "bad");
+    else setStatus($("gsm-launch-status"), r.error || "Launch failed.", "bad");
+  });
+
+  $("known-open-folder").addEventListener("click", async () => {
+    await api("POST", "/api/known/open-folder", {});
+  });
+  $("known-open-file").addEventListener("click", async () => {
+    await api("POST", "/api/known/open-file", {});
+  });
+  $("known-import").addEventListener("click", () => $("known-file").click());
+  $("known-file").addEventListener("change", async () => {
+    const f = $("known-file").files && $("known-file").files[0] ? $("known-file").files[0] : null;
+    if (!f) return;
+    try {
+      const text = await f.text();
+      if (text.length > 5_000_000) {
+        setStatus($("known-status"), "File too large (>5MB).", "bad");
+        return;
+      }
+      setStatus($("known-status"), "Importing...", null);
+      const r = await api("POST", "/api/known/import", { filename: f.name, content: text });
+      if (r.ok) setStatus($("known-status"), `Imported: ${r.destPath}`, "good");
+      else setStatus($("known-status"), r.error || "Import failed.", "bad");
+    } catch (e) {
+      setStatus($("known-status"), String(e?.message || e), "bad");
+    } finally {
+      $("known-file").value = "";
+    }
   });
 }
 

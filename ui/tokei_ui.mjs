@@ -91,6 +91,24 @@ function getGsmPluginFolder() {
   return path.join(appdata, "GameSentenceMiner");
 }
 
+function getDefaultGsmExePath() {
+  const local = process.env.LOCALAPPDATA;
+  if (!local) return null;
+  return path.join(local, "Programs", "gamesentenceminer", "GameSentenceMiner.exe");
+}
+
+function getKnownCsvPath() {
+  return path.join(userRoot, "data", "known.csv");
+}
+
+function launchExe(exePath) {
+  if (process.platform === "win32") {
+    spawn("cmd", ["/c", "start", "", exePath], { stdio: "ignore", detached: true, windowsHide: true }).unref();
+    return;
+  }
+  spawn(exePath, [], { stdio: "ignore", detached: true, windowsHide: true }).unref();
+}
+
 function getGsmPluginFile() {
   const folder = getGsmPluginFolder();
   return folder ? path.join(folder, "plugins.py") : null;
@@ -500,6 +518,92 @@ async function handleApi(req, res) {
       return json(res, 200, { ok: true, folder });
     } catch (e) {
       return json(res, 500, { ok: false, error: String(e?.message || e), folder });
+    }
+  }
+
+  if (req.method === "POST" && p === "/api/gsm/launch") {
+    const exePath = getDefaultGsmExePath();
+    if (!exePath) return json(res, 200, { ok: false, error: "LOCALAPPDATA_missing" });
+    if (!fs.existsSync(exePath)) {
+      const folder = path.dirname(exePath);
+      try {
+        openExternal(folder);
+      } catch {
+        // ignore
+      }
+      return json(res, 200, { ok: false, error: "gsm_exe_not_found", exePath, openedFolder: folder });
+    }
+    try {
+      launchExe(exePath);
+      return json(res, 200, { ok: true, exePath });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e), exePath });
+    }
+  }
+
+  if (req.method === "POST" && p === "/api/known/open-folder") {
+    const filePath = getKnownCsvPath();
+    const folder = path.dirname(filePath);
+    try {
+      fs.mkdirSync(folder, { recursive: true });
+    } catch {
+      // ignore
+    }
+    try {
+      openExternal(folder);
+      return json(res, 200, { ok: true, folder });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e), folder });
+    }
+  }
+
+  if (req.method === "POST" && p === "/api/known/open-file") {
+    const filePath = getKnownCsvPath();
+    try {
+      openExternal(filePath);
+      return json(res, 200, { ok: true, filePath, exists: fs.existsSync(filePath) });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e), filePath });
+    }
+  }
+
+  if (req.method === "POST" && p === "/api/known/import") {
+    const body = await readBody(req);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body || "{}");
+    } catch {
+      parsed = {};
+    }
+    const filename = typeof parsed?.filename === "string" ? parsed.filename.trim() : "known.csv";
+    const content = typeof parsed?.content === "string" ? parsed.content : "";
+    if (!content) return json(res, 400, { ok: false, error: "missing content" });
+    if (content.length > 5_000_000) return json(res, 400, { ok: false, error: "content too large" });
+
+    const destPath = getKnownCsvPath();
+    try {
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e), destPath });
+    }
+
+    let backupPath = null;
+    try {
+      if (fs.existsSync(destPath)) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        backupPath = `${destPath}.bak-${stamp}`;
+        fs.copyFileSync(destPath, backupPath);
+      }
+    } catch (e) {
+      return json(res, 500, { ok: false, error: `failed_to_backup: ${String(e?.message || e)}`, destPath, backupPath });
+    }
+
+    try {
+      const normalized = content.endsWith("\n") ? content : content + "\n";
+      fs.writeFileSync(destPath, normalized, "utf8");
+      return json(res, 200, { ok: true, destPath, backupPath, filename });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e), destPath, backupPath, filename });
     }
   }
 
