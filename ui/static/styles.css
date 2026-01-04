@@ -175,12 +175,124 @@ select.input { max-width: 280px; }
 .glance-grid .gk { color: var(--muted); font-size: 12px; }
 .glance-grid .gv { font-size: 12px; }
 
-.glance-chips {
-  margin-top: 10px;
+.glance-top {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
 }
+
+.glance-top .stamp {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  grid-template-areas:
+    "life known"
+    "today avg"
+    "today read"
+    "ret reviews";
+}
+
+@media (max-width: 780px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "life"
+      "known"
+      "today"
+      "avg"
+      "read"
+      "ret"
+      "reviews";
+  }
+}
+
+.stat {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.stat.life { grid-area: life; }
+.stat.known { grid-area: known; }
+.stat.today { grid-area: today; }
+.stat.avg { grid-area: avg; }
+.stat.read { grid-area: read; }
+.stat.ret { grid-area: ret; }
+.stat.reviews { grid-area: reviews; }
+
+.stat-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stat-value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.stat-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.today-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.today-row {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.today-row:first-child {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+.today-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  opacity: 0.95;
+  font-size: 12px;
+}
+
+.today-time {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.delta.good { color: var(--good); }
+.delta.bad { color: var(--bad); }
 
 .chip.mini {
   padding: 4px 8px;
@@ -188,6 +300,13 @@ select.input { max-width: 280px; }
   cursor: default;
 }
 .chip.mini.off { opacity: 0.55; }
+
+.glance-chips {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 
 .details { margin-top: 10px; }
 .details > summary {

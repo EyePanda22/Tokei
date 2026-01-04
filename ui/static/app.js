@@ -515,8 +515,82 @@ function fmtHours(h) {
   return n.toFixed(2);
 }
 
+function fmtInt(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "?";
+  return Math.trunc(x).toLocaleString();
+}
+
+function fmtSigned(n, digits = 2) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return null;
+  if (x === 0) return "—";
+  const sign = x > 0 ? "+" : "";
+  const v = digits === 0 ? String(Math.trunc(x)) : x.toFixed(digits);
+  return `${sign}${v}`;
+}
+
+function deltaClass(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x === 0) return "";
+  return x > 0 ? "good" : "bad";
+}
+
+function fmtHmsFromSeconds(sec) {
+  const x = Number(sec);
+  if (!Number.isFinite(x)) return "?";
+  const sign = x < 0 ? "-" : "";
+  let s = Math.trunc(Math.abs(x));
+  const hh = Math.trunc(s / 3600);
+  s -= hh * 3600;
+  const mm = Math.trunc(s / 60);
+  s -= mm * 60;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  return `${sign}${pad2(hh)}:${pad2(mm)}:${pad2(s)}`;
+}
+
+function fmtSignedHmsFromSeconds(sec) {
+  const x = Number(sec);
+  if (!Number.isFinite(x)) return null;
+  if (x === 0) return "—";
+  const sign = x > 0 ? "+" : "-";
+  return `${sign}${fmtHmsFromSeconds(Math.abs(x))}`;
+}
+
 let latestSync = null;
 let latestReport = null;
+
+function todayListHtml(entries) {
+  const list = Array.isArray(entries) ? entries.filter((x) => x && typeof x === "object") : [];
+  if (!list.length) return "";
+
+  const sorted = [...list].sort((a, b) => Number(b.seconds || 0) - Number(a.seconds || 0));
+  const top = sorted.slice(0, 8);
+  const rest = sorted.length - top.length;
+
+  const rows = top
+    .map((e) => {
+      const desc = typeof e.desc === "string" ? e.desc : "(no description)";
+      const seconds = Number(e.seconds || 0);
+      return `<div class="today-row"><div class="today-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</div><div class="today-time">${escapeHtml(
+        fmtHmsFromSeconds(seconds)
+      )}</div></div>`;
+    })
+    .join("");
+
+  const more = rest > 0 ? `<div class="hint">…and ${rest} more</div>` : "";
+  return `<div class="today-list">${rows}</div>${more}`;
+}
+
+function cardHtml({ areaClass, label, value, delta, deltaCls, extraHtml = "" }) {
+  const deltaHtml =
+    delta != null
+      ? `<div class="stat-sub">Δ <span class="delta ${escapeHtml(deltaCls || "")}">${escapeHtml(delta)}</span></div>`
+      : `<div class="stat-sub">&nbsp;</div>`;
+  return `<div class="stat ${escapeHtml(areaClass)}"><div class="stat-label">${escapeHtml(label)}</div><div class="stat-value">${escapeHtml(
+    value
+  )}</div>${deltaHtml}${extraHtml}</div>`;
+}
 
 function renderGlance() {
   const box = $("glance");
@@ -525,22 +599,76 @@ function renderGlance() {
       box.innerHTML = `<div class="hint">No sync snapshot yet. Click <b>Sync</b>.</div>`;
       return;
     }
+
     const totalReadingChars =
       Number(latestReport.manga_chars_total || 0) + Number(latestReport.ttsu_chars_total || 0) + Number(latestReport.gsm_chars_total || 0);
-    const rows = [
-      ["Latest report", latestReport.report_no != null ? `#${latestReport.report_no}` : "?"],
-      ["Total Lifetime Hours", fmtHours(latestReport.total_immersion_hours)],
-      ["Today immersion (h)", fmtHours((latestReport.today_immersion?.total_seconds || 0) / 3600.0)],
-      ["7d avg (h)", fmtHours((latestReport.avg_immersion_seconds || 0) / 3600.0)],
-      ["Known words", latestReport.known_words ?? "?"],
-      ["Total Characters Read", Number.isFinite(totalReadingChars) ? String(Math.trunc(totalReadingChars)) : "?"],
-      ["Total Anki Reviews", latestReport.total_reviews ?? "?"],
-      ["True retention (%)", fmtHours(latestReport.retention_rate)],
-    ];
-    const grid = rows
-      .map(([k, v]) => `<div class="gk">${escapeHtml(k)}</div><div class="gv">${escapeHtml(v)}</div>`)
-      .join("");
-    box.innerHTML = `<div class="glance-grid">${grid}</div><div class="hint">Sync snapshot not generated yet; showing latest report.</div>`;
+    const readingDelta =
+      Number(latestReport.manga_chars_delta || 0) + Number(latestReport.ttsu_chars_delta || 0) + Number(latestReport.gsm_chars_delta || 0);
+
+    const todaySeconds = Number(latestReport.today_immersion?.total_seconds || 0);
+    const avgSeconds = Number(latestReport.avg_immersion_seconds || 0);
+    const todayEntries = latestReport.today_immersion?.entries || [];
+
+    const reportNo = latestReport.report_no != null ? `#${latestReport.report_no}` : "?";
+    const head = `<div class="glance-top"><div class="stamp">Latest report: ${escapeHtml(reportNo)}</div></div>`;
+
+    const grid =
+      `<div class="stats-grid">` +
+      [
+        cardHtml({
+          areaClass: "life",
+          label: "Total Lifetime Hours",
+          value: fmtHours(latestReport.total_immersion_hours),
+          delta: fmtSigned(latestReport.total_immersion_delta_hours, 2),
+          deltaCls: deltaClass(latestReport.total_immersion_delta_hours),
+        }),
+        cardHtml({
+          areaClass: "known",
+          label: "Known Words",
+          value: fmtInt(latestReport.known_words),
+          delta: fmtSigned(latestReport.known_words_delta, 0),
+          deltaCls: deltaClass(latestReport.known_words_delta),
+        }),
+        cardHtml({
+          areaClass: "today",
+          label: "Today's Immersion",
+          value: fmtHmsFromSeconds(todaySeconds),
+          delta: null,
+          deltaCls: "",
+          extraHtml: todayListHtml(todayEntries),
+        }),
+        cardHtml({
+          areaClass: "avg",
+          label: "7-day Avg Hours",
+          value: fmtHmsFromSeconds(avgSeconds),
+          delta: fmtSignedHmsFromSeconds(latestReport.avg_immersion_delta_seconds || 0),
+          deltaCls: deltaClass(latestReport.avg_immersion_delta_seconds || 0),
+        }),
+        cardHtml({
+          areaClass: "read",
+          label: "Total Characters Read",
+          value: Number.isFinite(totalReadingChars) ? fmtInt(totalReadingChars) : "?",
+          delta: fmtSigned(readingDelta, 0),
+          deltaCls: deltaClass(readingDelta),
+        }),
+        cardHtml({
+          areaClass: "ret",
+          label: "Anki True Retention",
+          value: `${fmtHours(latestReport.retention_rate)}%`,
+          delta: fmtSigned(latestReport.retention_delta, 2),
+          deltaCls: deltaClass(latestReport.retention_delta),
+        }),
+        cardHtml({
+          areaClass: "reviews",
+          label: "Total Anki Reviews",
+          value: fmtInt(latestReport.total_reviews),
+          delta: fmtSigned(latestReport.total_reviews_delta, 0),
+          deltaCls: deltaClass(latestReport.total_reviews_delta),
+        }),
+      ].join("") +
+      `</div>`;
+
+    box.innerHTML = `${head}${grid}<div class="hint">Sync snapshot not generated yet; showing latest report.</div>`;
     return;
   }
 
@@ -548,29 +676,72 @@ function renderGlance() {
   const syncedAt = latestSync.synced_at ? new Date(latestSync.synced_at).toLocaleString() : "?";
   const totalReadingChars =
     Number(s.manga_chars_total || 0) + Number(s.ttsu_chars_total || 0) + Number(s.gsm_chars_total || 0);
-
-  const rows = [
-    ["Synced", syncedAt],
-    ["Total Lifetime Hours", fmtHours(s.immersion_total_hours)],
-    ["Today immersion (h)", fmtHours(s.immersion_today_hours)],
-    ["7d avg (h)", fmtHours(s.immersion_7d_avg_hours)],
-    ["Known words", s.tokei_surface_words ?? s.known_words ?? "?"],
-    ["Total Characters Read", Number.isFinite(totalReadingChars) ? String(Math.trunc(totalReadingChars)) : "?"],
-    ["Total Anki Reviews", s.anki_total_reviews ?? "?"],
-    ["True retention (%)", fmtHours(s.anki_true_retention_rate)],
-  ];
-
-  const grid = rows
-    .map(([k, v]) => `<div class="gk">${escapeHtml(k)}</div><div class="gv">${escapeHtml(v)}</div>`)
-    .join("");
+  const readingDelta = Number(s.manga_chars_delta || 0) + Number(s.ttsu_chars_delta || 0) + Number(s.gsm_chars_delta || 0);
+  const todaySeconds = Number(latestSync.today_immersion?.total_seconds || 0);
+  const todayEntries = latestSync.today_immersion?.entries || [];
+  const avgSeconds = Number(s.immersion_7d_avg_hours || 0) * 3600.0;
 
   const lastReport = latestSync.last_report && typeof latestSync.last_report === "object" ? latestSync.last_report : null;
-  const reportLine =
-    lastReport && lastReport.report_no != null
-      ? `<div class="hint">Latest report: #${escapeHtml(lastReport.report_no)} (${escapeHtml(lastReport.report_day || "?")})</div>`
-      : `<div class="hint">Latest report: none yet</div>`;
+  const reportLine = lastReport && lastReport.report_no != null ? `Latest report: #${lastReport.report_no}` : `Latest report: none yet`;
 
-  box.innerHTML = `<div class="glance-grid">${grid}</div>${reportLine}`;
+  const head = `<div class="glance-top"><div class="stamp">Synced: ${escapeHtml(syncedAt)}</div><div class="stamp">${escapeHtml(reportLine)}</div></div>`;
+  const grid =
+    `<div class="stats-grid">` +
+    [
+      cardHtml({
+        areaClass: "life",
+        label: "Total Lifetime Hours",
+        value: fmtHours(s.immersion_total_hours),
+        delta: fmtSigned(s.immersion_total_delta_hours, 2),
+        deltaCls: deltaClass(s.immersion_total_delta_hours),
+      }),
+      cardHtml({
+        areaClass: "known",
+        label: "Known Words",
+        value: fmtInt(s.tokei_surface_words ?? s.known_words),
+        delta: fmtSigned(s.known_words_delta, 0),
+        deltaCls: deltaClass(s.known_words_delta),
+      }),
+      cardHtml({
+        areaClass: "today",
+        label: "Today's Immersion",
+        value: fmtHmsFromSeconds(todaySeconds),
+        delta: null,
+        deltaCls: "",
+        extraHtml: todayListHtml(todayEntries),
+      }),
+      cardHtml({
+        areaClass: "avg",
+        label: "7-day Avg Hours",
+        value: fmtHmsFromSeconds(avgSeconds),
+        delta: fmtSignedHmsFromSeconds(Number(s.immersion_7d_avg_delta_hours || 0) * 3600.0),
+        deltaCls: deltaClass(Number(s.immersion_7d_avg_delta_hours || 0) * 3600.0),
+      }),
+      cardHtml({
+        areaClass: "read",
+        label: "Total Characters Read",
+        value: Number.isFinite(totalReadingChars) ? fmtInt(totalReadingChars) : "?",
+        delta: fmtSigned(readingDelta, 0),
+        deltaCls: deltaClass(readingDelta),
+      }),
+      cardHtml({
+        areaClass: "ret",
+        label: "Anki True Retention",
+        value: `${fmtHours(s.anki_true_retention_rate)}%`,
+        delta: fmtSigned(s.anki_true_retention_delta, 2),
+        deltaCls: deltaClass(s.anki_true_retention_delta),
+      }),
+      cardHtml({
+        areaClass: "reviews",
+        label: "Total Anki Reviews",
+        value: fmtInt(s.anki_total_reviews),
+        delta: fmtSigned(s.anki_total_reviews_delta, 0),
+        deltaCls: deltaClass(s.anki_total_reviews_delta),
+      }),
+    ].join("") +
+    `</div>`;
+
+  box.innerHTML = `${head}${grid}`;
 }
 
 async function refreshLatestSync() {
