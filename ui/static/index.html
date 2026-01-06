@@ -9,14 +9,16 @@
   <body>
     <header>
       <div class="title">
-        <div class="app">Tokei</div>
-        <div class="subtitle">Setup + validation + run</div>
+        <div>
+          <div class="app">Tokei</div>
+          <div class="subtitle">Setup + validation + run</div>
+        </div>
       </div>
       <nav>
+        <button id="tab-run" class="tab">Dashboard</button>
         <button id="tab-setup" class="tab active">Setup</button>
         <button id="tab-sources" class="tab">Sources</button>
-        <button id="tab-run" class="tab">Run</button>
-        <button id="tab-logs" class="tab">Logs</button>
+        <button id="tab-getting-started" class="tab">Getting started</button>
       </nav>
     </header>
 
@@ -121,6 +123,39 @@
           </div>
 
           <div class="card full">
+            <h2>Launch options</h2>
+            <div class="row">
+              <label class="check">
+                <input id="launch-open-on-startup" type="checkbox" />
+                Open Tokei on startup
+              </label>
+            </div>
+            <div class="hint">Launches Tokei automatically when you log in (Windows).</div>
+
+            <div class="row">
+              <label class="check">
+                <input id="launch-start-minimized" type="checkbox" />
+                Start minimized to tray
+              </label>
+            </div>
+            <div class="hint">Starts hidden with only a tray icon. Use the tray menu to open the dashboard.</div>
+
+            <div class="row">
+              <label class="check">
+                <input id="launch-close-minimizes" type="checkbox" />
+                Close minimizes to tray
+              </label>
+            </div>
+            <div class="hint">Clicking the window close button hides Tokei instead of quitting. Use tray ▸ Quit to exit.</div>
+
+            <div class="row">
+              <button id="launch-save" class="btn primary">Save launch options</button>
+              <div id="launch-status" class="status"></div>
+            </div>
+            <div class="hint">These settings are stored in <code>config.json</code> and take effect after you restart the app.</div>
+          </div>
+
+          <div class="card full">
             <h2>GSM live sessions (optional)</h2>
             <div class="hint">
               Click <b>Install GSM live sessions</b> to add <code>tokei_live_sync.py</code>. GSM typically has a single <code>plugins.py</code>, so if you already have one, use <b>Copy plugins.py shim</b> and paste it into your existing file (don't overwrite unless you intend to).
@@ -167,6 +202,11 @@
             <div class="hint">
               Enable/disable sources and jump to your tools. Disabled sources are excluded from report totals/sections.
             </div>
+            <div class="row">
+              <button id="sources-save" class="btn primary">Save sources</button>
+              <div id="sources-status" class="status"></div>
+            </div>
+            <div class="hint">Writes changes to <code>config.json</code>.</div>
           </div>
 
           <div class="card full">
@@ -178,6 +218,14 @@
               </label>
               <button id="mokuro-open" class="btn">Open reader.mokuro.app</button>
               <div id="mokuro-status" class="status"></div>
+            </div>
+            <div class="row">
+              <input id="mokuro-path" class="input" type="text" placeholder="Path to volume-data.json or mokuro-reader folder" />
+              <button id="mokuro-browse-folder" class="btn">Choose folder…</button>
+              <button id="mokuro-open-path" class="btn">Open folder</button>
+            </div>
+            <div class="hint">
+              Recommended for new users: sync your Mokuro folder with Google Drive. After installing Google Drive, open your Drive on your PC (often <code>G:\\</code>), find your <code>mokuro-reader</code> folder, and select it here (or select <code>volume-data.json</code>).
             </div>
             <div class="hint">Uses your configured <code>mokuro.volume_data_path</code> when enabled.</div>
           </div>
@@ -191,6 +239,14 @@
               </label>
               <button id="ttsu-open" class="btn">Open reader.ttsu.app</button>
               <div id="ttsu-status" class="status"></div>
+            </div>
+            <div class="row">
+              <input id="ttsu-path" class="input" type="text" placeholder="Path to ttu-reader-data folder" />
+              <button id="ttsu-browse-folder" class="btn">Choose folder…</button>
+              <button id="ttsu-open-path" class="btn">Open folder</button>
+            </div>
+            <div class="hint">
+              Recommended for new users: sync your Ttsu exports with Google Drive. After installing Google Drive, open your Drive on your PC (often <code>G:\\</code>), find your <code>ttu-reader-data</code> folder, and select it here.
             </div>
             <div class="hint">Uses your configured <code>ttsu.data_dir</code> when enabled.</div>
           </div>
@@ -353,6 +409,10 @@
             </details>
           </div>
         </div>
+      </section>
+
+      <section id="panel-getting-started" class="panel">
+        <div id="getting-started-grid" class="grid"></div>
       </section>
     </main>
 

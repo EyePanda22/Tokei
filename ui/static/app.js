@@ -23,12 +23,206 @@ function setStatus(el, msg, kind) {
 let activeRuleRow = null;
 let discoveredAnki = null;
 
+const KNOWN_TABS = ["run", "setup", "sources", "getting-started", "logs"];
+
 function selectTab(name) {
-  for (const t of ["setup", "sources", "run", "logs"]) {
-    $(`tab-${t}`).classList.toggle("active", t === name);
-    $(`panel-${t}`).classList.toggle("active", t === name);
+  for (const t of KNOWN_TABS) {
+    const tabEl = $(`tab-${t}`);
+    const panelEl = $(`panel-${t}`);
+    if (tabEl) tabEl.classList.toggle("active", t === name);
+    if (panelEl) panelEl.classList.toggle("active", t === name);
+  }
+  if (name === "getting-started") ensureKofiWidgetLoaded();
+  try {
+    localStorage.setItem("tokei_last_tab", String(name || ""));
+  } catch {
+    // ignore
   }
 }
+
+function renderGettingStartedCard(card) {
+  card.innerHTML = `
+    <h2>Getting started</h2>
+    <div class="subtabs">
+      <button id="gs-tab-guide" class="subtab-btn active" type="button">Getting started</button>
+      <button id="gs-tab-support" class="subtab-btn" type="button">Support</button>
+    </div>
+
+    <div id="gs-pane-guide" class="gs-pane active">
+      <div class="hint">
+        Most of the time you’ll use <b>Dashboard</b> to <b>Sync</b> and <b>Generate report</b>.
+      </div>
+
+      <div class="subhead">Step 1: Setup</div>
+      <div class="hint">
+        Add your Toggl token (optional), configure Anki snapshot rules, then click <b>Save config.json</b>.
+      </div>
+
+      <div class="subhead">Step 2: Sources</div>
+      <div class="hint">
+        Enable/disable sources you use (Mokuro, Ttsu, GSM). Import <code>known.csv</code> if you have one.
+      </div>
+
+      <div class="subhead">Step 3: Dashboard</div>
+      <div class="hint">
+        Click <b>Sync</b> to refresh caches. Click <b>Generate report</b> to produce HTML/PNG output (optionally sync first).
+      </div>
+
+      <div class="subhead">Troubleshooting</div>
+      <div class="hint">
+        If something fails, use <b>File ▸ Open Logs</b> to open the log folder and check <code>runtime.log</code> and any <code>WARNINGS.txt</code> next to your report.
+      </div>
+    </div>
+
+    <div id="gs-pane-support" class="gs-pane">
+      <div class="hint">
+        If Tokei has been helpful and you’d like to support development, you can donate via Ko-fi.
+      </div>
+      <div class="support-row">
+        <div id="kofi-widget" class="kofi-host"></div>
+        <a class="btn" href="https://ko-fi.com/G2G81MFOAV" target="_blank" rel="noreferrer">Open Ko-fi</a>
+      </div>
+      <div id="kofi-status" class="status"></div>
+    </div>
+  `;
+
+  const setPane = (which) => {
+    const guideBtn = $("gs-tab-guide");
+    const supportBtn = $("gs-tab-support");
+    const guidePane = $("gs-pane-guide");
+    const supportPane = $("gs-pane-support");
+    if (!guideBtn || !supportBtn || !guidePane || !supportPane) return;
+
+    const showSupport = which === "support";
+    guideBtn.classList.toggle("active", !showSupport);
+    supportBtn.classList.toggle("active", showSupport);
+    guidePane.classList.toggle("active", !showSupport);
+    supportPane.classList.toggle("active", showSupport);
+
+    if (showSupport) ensureKofiWidgetLoaded();
+  };
+
+  const guideBtn = $("gs-tab-guide");
+  const supportBtn = $("gs-tab-support");
+  if (guideBtn) guideBtn.addEventListener("click", () => setPane("guide"));
+  if (supportBtn) supportBtn.addEventListener("click", () => setPane("support"));
+}
+
+function renderGettingStartedCardV2(card) {
+  card.innerHTML = `
+    <h2>How to Use Tokei</h2>
+
+    <div class="hint">
+      Most of the time, you'll work from the Dashboard to sync data and generate reports.
+    </div>
+
+    <div class="subhead">Step 1: Setup</div>
+    <div class="hint">
+      Add your Toggl token (optional), configure Anki snapshot rules, then click Save to write <code>config.json</code>.
+    </div>
+    <div class="hint">
+      Anki stats can come from the built-in snapshot exporter (enable + add rules), or from the Hashi add-on (advanced).
+    </div>
+
+    <div class="subhead">Step 2: Sources</div>
+    <div class="hint">
+      Enable or disable the sources you use (Mokuro, Ttsu, GSM). If you have a <code>known.csv</code>, you can import it here.
+    </div>
+    <div class="hint">
+      Tip for new users: install Google Drive and sync your reading data. After installing, open your Drive on your PC (often <code>G:\\</code>), find <code>ttu-reader-data</code> (Ttsu) and <code>mokuro-reader</code> (Mokuro), then select those paths in the Sources tab.
+    </div>
+    <div class="hint">
+      Sources are read-only: Tokei never modifies external tools, it only reads them and writes its own caches.
+    </div>
+
+    <div class="subhead">Step 3: Dashboard</div>
+    <div class="hint">Click <b>Sync</b> to refresh all enabled source caches and update <code>cache/latest_sync.json</code>.</div>
+    <div class="hint">Click <b>Generate report</b> to create HTML/PNG output in your configured output folder.</div>
+    <div class="hint">You can optionally re-sync before generating via the checkbox.</div>
+
+    <div class="subhead">Troubleshooting</div>
+    <div class="hint">
+      Use <b>File ▸ Open Logs</b> to open the log folder. Check <code>runtime.log</code> and any <code>WARNINGS.txt</code> next to your report.
+    </div>
+
+    <div class="support-block">
+      <div class="subhead">Support</div>
+      <div class="hint">This project is built and maintained in my free time.</div>
+      <div class="hint">If it's useful to you, consider supporting it on Ko-fi.</div>
+      <div class="hint">Your support helps keep development active and sustainable.</div>
+      <div class="support-row">
+        <div id="kofi-widget" class="kofi-host"></div>
+        <div id="kofi-status" class="status"></div>
+      </div>
+    </div>
+  `;
+}
+
+let kofiScriptLoading = false;
+let kofiScriptLoaded = false;
+
+function ensureKofiWidgetLoaded() {
+  const host = $("kofi-widget");
+  const statusEl = $("kofi-status");
+  if (!host) return;
+
+  const renderFromGlobal = () => {
+    try {
+      if (!window.kofiwidget2 || typeof window.kofiwidget2.init !== "function" || typeof window.kofiwidget2.getHTML !== "function") {
+        throw new Error("kofiwidget2 missing");
+      }
+      window.kofiwidget2.init("Support me on Ko-fi", "#d95e38", "G2G81MFOAV");
+      host.innerHTML = window.kofiwidget2.getHTML();
+      if (statusEl) setStatus(statusEl, "", null);
+    } catch (e) {
+      if (statusEl) setStatus(statusEl, `Ko-fi widget failed to load (${String(e?.message || e)}).`, "bad");
+    }
+  };
+
+  if (kofiScriptLoaded) return renderFromGlobal();
+  if (kofiScriptLoading) return;
+
+  kofiScriptLoading = true;
+  if (statusEl) setStatus(statusEl, "Loading Ko-fi widget...", null);
+
+  const s = document.createElement("script");
+  s.src = "https://storage.ko-fi.com/cdn/widget/Widget_2.js";
+  s.async = true;
+  s.onload = () => {
+    kofiScriptLoading = false;
+    kofiScriptLoaded = true;
+    renderFromGlobal();
+  };
+  s.onerror = () => {
+    kofiScriptLoading = false;
+    if (statusEl) setStatus(statusEl, "Ko-fi widget failed to load (network blocked).", "bad");
+  };
+  document.head.appendChild(s);
+}
+
+function relocateGettingStartedCard() {
+  const logsPanel = $("panel-logs");
+  const destGrid = $("getting-started-grid");
+  if (!logsPanel || !destGrid) return;
+
+  const cards = Array.from(logsPanel.querySelectorAll(".card"));
+  const card = cards.find((c) => (c.querySelector("h2")?.textContent || "").trim().toLowerCase() === "getting started");
+  if (card) {
+    card.classList.add("full");
+    destGrid.appendChild(card);
+    renderGettingStartedCardV2(card);
+  }
+}
+
+// Allow Electron main process to request a tab switch (tray double click, menu, etc).
+window.__tokeiSelectTab = (name) => {
+  try {
+    selectTab(name);
+    localStorage.setItem("tokei_last_tab", String(name || ""));
+  } catch {
+    // ignore
+  }
+};
 
 async function copyText(text) {
   const value = String(text ?? "");
@@ -306,6 +500,12 @@ async function loadConfig() {
     return null;
   }
   const cfg = r.config || {};
+
+  const launch = cfg.launch && typeof cfg.launch === "object" ? cfg.launch : {};
+  $("launch-open-on-startup").checked = launch.open_on_startup === true;
+  $("launch-start-minimized").checked = launch.start_minimized_to_tray === true;
+  $("launch-close-minimizes").checked = launch.close_minimizes_to_tray === true;
+
   const snap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
   $("anki-enabled").checked = snap.enabled === true;
   $("anki-output-dir").value = typeof snap.output_dir === "string" ? snap.output_dir : "hashi_exports";
@@ -313,10 +513,14 @@ async function loadConfig() {
   const mokuro = cfg.mokuro && typeof cfg.mokuro === "object" ? cfg.mokuro : {};
   const mokuroPath = typeof mokuro.volume_data_path === "string" ? mokuro.volume_data_path.trim() : "";
   $("mokuro-enabled").checked = typeof mokuro.enabled === "boolean" ? mokuro.enabled : Boolean(mokuroPath);
+  const mokuroPathInput = $("mokuro-path");
+  if (mokuroPathInput) mokuroPathInput.value = mokuroPath;
 
   const ttsu = cfg.ttsu && typeof cfg.ttsu === "object" ? cfg.ttsu : {};
   const ttsuPath = typeof ttsu.data_dir === "string" ? ttsu.data_dir.trim() : "";
   $("ttsu-enabled").checked = typeof ttsu.enabled === "boolean" ? ttsu.enabled : Boolean(ttsuPath);
+  const ttsuPathInput = $("ttsu-path");
+  if (ttsuPathInput) ttsuPathInput.value = ttsuPath;
 
   const gsm = cfg.gsm && typeof cfg.gsm === "object" ? cfg.gsm : {};
   const gsmDbPath = typeof gsm.db_path === "string" ? gsm.db_path.trim() : "auto";
@@ -333,6 +537,11 @@ async function loadConfig() {
 
 async function saveConfig(currentCfg) {
   const cfg = currentCfg && typeof currentCfg === "object" ? currentCfg : {};
+  cfg.launch = cfg.launch && typeof cfg.launch === "object" ? cfg.launch : {};
+  cfg.launch.open_on_startup = $("launch-open-on-startup").checked;
+  cfg.launch.start_minimized_to_tray = $("launch-start-minimized").checked;
+  cfg.launch.close_minimizes_to_tray = $("launch-close-minimizes").checked;
+
   cfg.anki_snapshot = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
   cfg.anki_snapshot.enabled = $("anki-enabled").checked;
   const od = $("anki-output-dir").value.trim();
@@ -341,8 +550,10 @@ async function saveConfig(currentCfg) {
 
   cfg.mokuro = cfg.mokuro && typeof cfg.mokuro === "object" ? cfg.mokuro : {};
   cfg.mokuro.enabled = $("mokuro-enabled").checked;
+  cfg.mokuro.volume_data_path = ($("mokuro-path")?.value || "").trim();
   cfg.ttsu = cfg.ttsu && typeof cfg.ttsu === "object" ? cfg.ttsu : {};
   cfg.ttsu.enabled = $("ttsu-enabled").checked;
+  cfg.ttsu.data_dir = ($("ttsu-path")?.value || "").trim();
   cfg.gsm = cfg.gsm && typeof cfg.gsm === "object" ? cfg.gsm : {};
   cfg.gsm.enabled = $("gsm-enabled").checked;
 
@@ -351,7 +562,10 @@ async function saveConfig(currentCfg) {
 
   setStatus($("config-status"), "Saving...", null);
   const r = await api("POST", "/api/config", cfg);
-  if (r.ok) setStatus($("config-status"), "Saved config.json.", "good");
+  if (r.ok) {
+    localStorage.setItem("tokei_setup_complete", "1");
+    setStatus($("config-status"), "Saved config.json.", "good");
+  }
   else setStatus($("config-status"), r.error || "Failed.", "bad");
 }
 
@@ -815,13 +1029,43 @@ async function openTarget(target) {
   await api("POST", "/api/open", { target });
 }
 
+function dirnameLite(p) {
+  const s = String(p || "");
+  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+  return i >= 0 ? s.slice(0, i) : s;
+}
+
+async function pickPath(kind, title, opts = {}) {
+  const endpoint = kind === "file" ? "/api/dialog/open-file" : "/api/dialog/open-folder";
+  const r = await api("POST", endpoint, { title, ...opts });
+  if (!r.ok) {
+    alert(r.error || "Picker not available in this mode. Paste the path manually.");
+    return null;
+  }
+  return typeof r.path === "string" ? r.path : null;
+}
+
 let currentConfig = null;
 
 function wireUi() {
-  $("tab-setup").addEventListener("click", () => selectTab("setup"));
-  $("tab-sources").addEventListener("click", () => selectTab("sources"));
-  $("tab-run").addEventListener("click", () => selectTab("run"));
-  $("tab-logs").addEventListener("click", () => selectTab("logs"));
+  const setupTab = $("tab-setup");
+  if (setupTab) setupTab.addEventListener("click", () => selectTab("setup"));
+  const sourcesTab = $("tab-sources");
+  if (sourcesTab) sourcesTab.addEventListener("click", () => selectTab("sources"));
+  const runTab = $("tab-run");
+  if (runTab) runTab.addEventListener("click", () => selectTab("run"));
+  const gettingStartedTab = $("tab-getting-started");
+  if (gettingStartedTab) gettingStartedTab.addEventListener("click", () => selectTab("getting-started"));
+
+  const sourcesSave = $("sources-save");
+  if (sourcesSave) {
+    sourcesSave.addEventListener("click", async () => {
+      setStatus($("sources-status"), "Saving...", null);
+      await saveConfig(currentConfig);
+      currentConfig = (await loadConfig()) || currentConfig;
+      setStatus($("sources-status"), "Saved.", "good");
+    });
+  }
 
   $("toggl-reveal").addEventListener("click", toggleTogglReveal);
   $("toggl-save").addEventListener("click", saveToken);
@@ -853,6 +1097,13 @@ function wireUi() {
     currentConfig = (await loadConfig()) || currentConfig;
   });
 
+  $("launch-save").addEventListener("click", async () => {
+    setStatus($("launch-status"), "Saving...", null);
+    await saveConfig(currentConfig);
+    currentConfig = (await loadConfig()) || currentConfig;
+    setStatus($("launch-status"), "Saved.", "good");
+  });
+
   $("config-discard").addEventListener("click", discardConfigChanges);
 
   $("open-output").addEventListener("click", async () => {
@@ -866,9 +1117,49 @@ function wireUi() {
   $("mokuro-open").addEventListener("click", async () => {
     await api("POST", "/api/open", { target: "https://reader.mokuro.app" });
   });
+  const mokuroBrowseFolder = $("mokuro-browse-folder");
+  if (mokuroBrowseFolder) {
+    mokuroBrowseFolder.addEventListener("click", async () => {
+      const p = await pickPath("folder", "Select Mokuro folder (mokuro-reader)");
+      if (!p) return;
+      const input = $("mokuro-path");
+      if (input) input.value = p;
+      const enabled = $("mokuro-enabled");
+      if (enabled) enabled.checked = true;
+    });
+  }
+  const mokuroOpenPath = $("mokuro-open-path");
+  if (mokuroOpenPath) {
+    mokuroOpenPath.addEventListener("click", async () => {
+      const p = ($("mokuro-path")?.value || "").trim();
+      if (!p) return;
+      await openTarget(dirnameLite(p));
+    });
+  }
+
   $("ttsu-open").addEventListener("click", async () => {
     await api("POST", "/api/open", { target: "https://reader.ttsu.app" });
   });
+  const ttsuBrowseFolder = $("ttsu-browse-folder");
+  if (ttsuBrowseFolder) {
+    ttsuBrowseFolder.addEventListener("click", async () => {
+      const p = await pickPath("folder", "Select Ttsu ttu-reader-data folder");
+      if (!p) return;
+      const input = $("ttsu-path");
+      if (input) input.value = p;
+      const enabled = $("ttsu-enabled");
+      if (enabled) enabled.checked = true;
+    });
+  }
+  const ttsuOpenPath = $("ttsu-open-path");
+  if (ttsuOpenPath) {
+    ttsuOpenPath.addEventListener("click", async () => {
+      const p = ($("ttsu-path")?.value || "").trim();
+      if (!p) return;
+      await openTarget(dirnameLite(p));
+    });
+  }
+
   $("gsm-open-folder2").addEventListener("click", async () => {
     await api("POST", "/api/gsm/open-folder", {});
   });
@@ -906,6 +1197,8 @@ function wireUi() {
       $("known-file").value = "";
     }
   });
+
+  relocateGettingStartedCard();
 }
 
 async function init() {
@@ -917,6 +1210,19 @@ async function init() {
   await refreshLatestReportStats();
   await refreshLatestSync();
   await refreshLogs();
+
+  try {
+    const url = new URL(window.location.href);
+    const forced = (url.searchParams.get("tab") || "").trim();
+    if (forced && KNOWN_TABS.includes(forced)) return window.__tokeiSelectTab(forced);
+  } catch {
+    // ignore
+  }
+
+  const setupComplete = localStorage.getItem("tokei_setup_complete") === "1";
+  const lastTab = (localStorage.getItem("tokei_last_tab") || "").trim();
+  if (lastTab && KNOWN_TABS.includes(lastTab)) return window.__tokeiSelectTab(lastTab);
+  if (setupComplete) return window.__tokeiSelectTab("run");
 }
 
 init();

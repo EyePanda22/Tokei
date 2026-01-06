@@ -161,6 +161,26 @@ function openExternal(target) {
   spawn("xdg-open", [target], { stdio: "ignore", detached: true }).unref();
 }
 
+async function getElectronAppOrNull() {
+  try {
+    if (!process.versions || !process.versions.electron) return null;
+    const mod = await import("electron");
+    return mod && mod.app ? mod.app : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getElectronDialogOrNull() {
+  try {
+    if (!process.versions || !process.versions.electron) return null;
+    const mod = await import("electron");
+    return mod && mod.dialog ? mod.dialog : null;
+  } catch {
+    return null;
+  }
+}
+
 function getPythonCommand() {
   const cmd = process.env.TOKEI_PYTHON_EXE;
   return cmd && cmd.trim() ? cmd.trim() : "python";
@@ -258,6 +278,78 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && p === "/api/env") {
     return json(res, 200, { ok: true, appRoot, userRoot, platform: process.platform, node: process.version });
+  }
+
+  if (req.method === "POST" && p === "/api/dialog/open-folder") {
+    const dialog = await getElectronDialogOrNull();
+    if (!dialog) return json(res, 200, { ok: false, error: "not_electron" });
+    const body = await readBody(req);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body || "{}");
+    } catch {
+      parsed = {};
+    }
+    const title = typeof parsed?.title === "string" ? parsed.title : "Select folder";
+    try {
+      const r = await dialog.showOpenDialog({ title, properties: ["openDirectory"] });
+      const filePaths = Array.isArray(r?.filePaths) ? r.filePaths : [];
+      const first = filePaths.length ? String(filePaths[0]) : "";
+      return json(res, 200, { ok: !r.canceled && !!first, canceled: !!r.canceled, path: first });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e) });
+    }
+  }
+
+  if (req.method === "POST" && p === "/api/dialog/open-file") {
+    const dialog = await getElectronDialogOrNull();
+    if (!dialog) return json(res, 200, { ok: false, error: "not_electron" });
+    const body = await readBody(req);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body || "{}");
+    } catch {
+      parsed = {};
+    }
+    const title = typeof parsed?.title === "string" ? parsed.title : "Select file";
+    const filters = Array.isArray(parsed?.filters) ? parsed.filters : undefined;
+    try {
+      const r = await dialog.showOpenDialog({ title, filters, properties: ["openFile"] });
+      const filePaths = Array.isArray(r?.filePaths) ? r.filePaths : [];
+      const first = filePaths.length ? String(filePaths[0]) : "";
+      return json(res, 200, { ok: !r.canceled && !!first, canceled: !!r.canceled, path: first });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e?.message || e) });
+    }
+  }
+
+  if (req.method === "POST" && p === "/api/app/quit") {
+    const app = await getElectronAppOrNull();
+    if (!app) return json(res, 200, { ok: false, error: "not_electron" });
+    json(res, 200, { ok: true });
+    setTimeout(() => {
+      try {
+        app.quit();
+      } catch {
+        // ignore
+      }
+    }, 50);
+    return;
+  }
+
+  if (req.method === "POST" && p === "/api/app/restart") {
+    const app = await getElectronAppOrNull();
+    if (!app) return json(res, 200, { ok: false, error: "not_electron" });
+    json(res, 200, { ok: true });
+    setTimeout(() => {
+      try {
+        app.relaunch();
+        app.exit(0);
+      } catch {
+        // ignore
+      }
+    }, 50);
+    return;
   }
 
   if (req.method === "GET" && p === "/api/config") {

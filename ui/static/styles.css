@@ -33,6 +33,10 @@ header {
 .title .app { font-size: 18px; font-weight: 700; }
 .title .subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
+#panel-getting-started .grid {
+  grid-template-columns: 1fr;
+}
+
 nav { display: flex; gap: 8px; }
 .tab {
   border: 1px solid var(--border);
@@ -91,6 +95,26 @@ select.input { max-width: 280px; }
 .status { margin-left: 6px; color: var(--muted); font-size: 12px; }
 .status.good { color: var(--good); }
 .status.bad { color: var(--bad); }
+
+.support-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.support-block {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.kofi-host {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
 
 .advanced {
   margin-top: 10px;

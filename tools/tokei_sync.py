@@ -904,6 +904,8 @@ def _read_mokuro_manga_chars(cfg: Config, warnings: list[str] | None = None) -> 
     if not p:
         return 0
     path = Path(p)
+    if path.exists() and path.is_dir():
+        path = path / "volume-data.json"
     if not path.exists():
         if warnings is not None:
             warnings.append(f"Mokuro volume-data.json not found: {path}.")
