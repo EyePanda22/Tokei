@@ -737,15 +737,51 @@ async function handleApi(req, res) {
     const mode = String(parsed?.mode || "overwrite");
     const syncBefore = parsed?.sync_before_report === false ? false : true;
 
-    const args = ["Tokei.mjs", "--no-setup", "--no-pause"];
-    if (!syncBefore) args.push("--no-sync");
-    if (mode === "new") args.push("--allow-same-day");
-    if (mode === "overwrite") args.push("--overwrite-today");
-
     const script = path.join(appRoot, "Tokei.mjs");
-    const nodeArgs = [script, ...args.slice(1)];
     const env = { ...getNodeRunnerEnv(), TOKEI_APP_ROOT: appRoot, TOKEI_USER_ROOT: userRoot };
-    const r = await runProcess(process.execPath, nodeArgs, { cwd: appRoot, env });
+
+    let stdoutCombined = "";
+    let stderrCombined = "";
+
+    if (syncBefore) {
+      const syncArgs = ["Tokei.mjs", "--no-setup", "--no-pause", "--sync-only"];
+      const syncNodeArgs = [script, ...syncArgs.slice(1)];
+      const rSync = await runProcess(process.execPath, syncNodeArgs, { cwd: appRoot, env });
+      stdoutCombined += (rSync.stdout || "").trim();
+      stderrCombined += (rSync.stderr || "").trim();
+      if (rSync.code !== 0) {
+        const latest = safeReadJson(getLatestStatsPath()).value;
+        const latestSync = safeReadJson(getLatestSyncPath()).value;
+        const cfg = safeReadJson(getConfigPath()).value || {};
+        const statsPath = resolveHashiStatsPath(cfg);
+        const ankiStats = statsPath ? safeReadJson(statsPath).value : null;
+        const exportedAt = ankiStats?.meta?.exported_at || null;
+        return json(res, 200, {
+          ok: false,
+          code: rSync.code,
+          stdout: stdoutCombined,
+          stderr: stderrCombined,
+          latest_stats: latest,
+          latest_sync: latestSync,
+          anki_exported_at: exportedAt,
+        });
+      }
+    }
+
+    const reportArgs = ["Tokei.mjs", "--no-setup", "--no-pause"];
+    // If we just synced, render from that snapshot to avoid duplicate source reads.
+    if (syncBefore) reportArgs.push("--no-sync");
+    else reportArgs.push("--no-sync");
+    if (mode === "new") reportArgs.push("--allow-same-day");
+    if (mode === "overwrite") reportArgs.push("--overwrite-today");
+
+    const reportNodeArgs = [script, ...reportArgs.slice(1)];
+    const r = await runProcess(process.execPath, reportNodeArgs, { cwd: appRoot, env });
+
+    if (stdoutCombined) stdoutCombined += "\n\n";
+    if (stderrCombined) stderrCombined += "\n\n";
+    stdoutCombined += (r.stdout || "").trim();
+    stderrCombined += (r.stderr || "").trim();
 
     const latest = safeReadJson(getLatestStatsPath()).value;
     const latestSync = safeReadJson(getLatestSyncPath()).value;
@@ -757,8 +793,8 @@ async function handleApi(req, res) {
     return json(res, 200, {
       ok: r.code === 0,
       code: r.code,
-      stdout: (r.stdout || "").trim(),
-      stderr: (r.stderr || "").trim(),
+      stdout: stdoutCombined,
+      stderr: stderrCombined,
       latest_stats: latest,
       latest_sync: latestSync,
       anki_exported_at: exportedAt,
