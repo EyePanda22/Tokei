@@ -10,6 +10,8 @@ Note: Tokei runs as a console app (CLI), and also includes a setup-first UI (web
   <img src="assets/tokeilogo-1.png" alt="Tokei logo" width="420" style="max-width: 100%; height: auto;" />
 </p>
 
+**Download:** https://github.com/EyePanda22/Tokei/releases/latest
+
 Tokei is a standalone sync + report generator that combines:
 
 - Toggl (API token) for lifetime + today immersion (with description breakdown)
