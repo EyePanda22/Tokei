@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
+## 0.6.0 - 2026-01-07
+
+### Added
+- Native Electron **File** menu (Menu API): Open Logs, Restart, Quit.
+- Sources tab path configuration for Mokuro and Ttsu (folder picker) plus a **Save sources** action.
+- Mokuro path can now point at a folder (Tokei resolves `volume-data.json` within it).
+- Updated Getting started tab content, including Google Drive guidance for syncing Mokuro/Ttsu data and an optional Ko-fi support widget.
+
+### Changed
+- UI navigation now surfaces Logs via the File menu and keeps Getting started as a dedicated tab.
+
 ## 0.5.0 - 2026-01-04
 
 ### Added
@@ -18,9 +29,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 - Sync-only snapshot output: `cache/latest_sync.json` (refreshable multiple times per day without allocating a `report_no`).
-- New UI Run flow: separate **Sync** and **Generate report** actions with a “Sync before report” checkbox.
+- New UI Run flow: separate **Sync** and **Generate report** actions with a "Sync before report" checkbox.
 - New CLI flags: `--sync-only` and `--no-sync` for separating cache refresh from report rendering.
-- Improved “At a glance” UI summary for latest sync/report.
+- Improved "At a glance" UI summary for latest sync/report.
 
 ### Fixed
 
