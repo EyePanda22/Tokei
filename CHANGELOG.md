@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
+## 0.6.1 - 2026-01-07
+
+### Added
+- Electron UI: Toggl baseline lifetime time setting (Advanced) with in-app instructions and a quick link to Toggl Summary reports.
+
+### Changed
+- Clarified Toggl history limitations (default 60-day window) and baseline guidance in both the UI and README.
+- UI: smaller inline close button for Advanced panels.
+
+### Fixed
+- README: corrected Tokei logo path so the image renders.
+
 ## 0.6.0 - 2026-01-07
 
 ### Added
