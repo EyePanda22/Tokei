@@ -47,7 +47,7 @@ If you install Tokei from the Windows installer in Releases, there are no extra 
 
 ### Quick start (most users)
 
-1) Install Tokei (Electron UI build) and run it from the Start Menu shortcut
+1) Install Tokei (Latest Release) and run it from the Start Menu shortcut
 2) No extra installs needed (the installer bundles the full report pipeline)
 3) Optional (recommended for Mokuro/Ttsu): install Google Drive for Desktop so your reading data stays in sync
    - After it's installed, open your Drive on your PC (often `G:\`) and locate:
