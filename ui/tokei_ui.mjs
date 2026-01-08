@@ -11,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_ROOT) : path.resolve(__dirname, "..");
-const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : appRoot;
+const defaultUserRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "Tokei") : appRoot;
+const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : defaultUserRoot;
 
 function json(res, code, payload) {
   const body = Buffer.from(JSON.stringify(payload, null, 2) + "\n", "utf8");

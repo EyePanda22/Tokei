@@ -44,9 +44,193 @@ let discoveredAnki = null;
 
 const KNOWN_TABS = ["run", "setup", "sources", "getting-started", "logs"];
 
+const WIZARD_VERSION = 1;
+const WIZARD_SEEN_KEY = `tokei_setup_wizard_seen_v${WIZARD_VERSION}`;
+
+const THEME_OPTIONS = [
+  { id: "dark-graphite", label: "Dark Graphite (default)" },
+  { id: "bright-daylight", label: "Bright Daylight" },
+  { id: "sakura-night", label: "Sakura Night" },
+  { id: "midnight", label: "Midnight" },
+  { id: "forest-dawn", label: "Forest Dawn" },
+  { id: "neutral-balanced", label: "Neutral Balanced" },
+  { id: "solar-slate", label: "Solar Slate" },
+  { id: "neon-arcade", label: "Neon Arcade" },
+  { id: "bright-mint", label: "Bright Mint" },
+  { id: "bright-iris", label: "Bright Iris" },
+];
+
+let currentEnv = null;
+let wizardActiveRuleRow = null;
+
+function setWizardActiveRuleRow(tr) {
+  wizardActiveRuleRow = tr;
+  const body = $("wiz-rules-body");
+  if (!body) return;
+  for (const row of body.querySelectorAll("tr")) row.classList.toggle("active-row", row === tr);
+}
+
+function ensureWizardActiveRow() {
+  if (wizardActiveRuleRow && wizardActiveRuleRow.isConnected) return wizardActiveRuleRow;
+  const body = $("wiz-rules-body");
+  if (!body) return null;
+  const first = body.querySelector("tr");
+  if (first) setWizardActiveRuleRow(first);
+  return wizardActiveRuleRow;
+}
+
+function wizardRuleRow(rule, onRemove) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="input rid" placeholder="rule_id" /></td>
+    <td><input class="input decks" placeholder="Deck::Subdeck, Deck2::Subdeck" /></td>
+    <td><input class="input field" placeholder="Field name (e.g. Expression)" /></td>
+    <td><input class="input notetypes" placeholder="(optional) Note type A, Note type B" /></td>
+    <td><label class="check"><input class="subdecks" type="checkbox" /> include</label></td>
+    <td><input class="input mature" placeholder="21" /></td>
+    <td><button class="btn remove" type="button">Remove</button></td>
+  `;
+  tr.querySelector(".rid").value = rule?.rule_id || "default";
+  tr.querySelector(".decks").value = (rule?.deck_paths || []).join(", ");
+  tr.querySelector(".field").value = rule?.target_field || "";
+  tr.querySelector(".notetypes").value = (rule?.note_types || []).join(", ");
+  tr.querySelector(".subdecks").checked = rule?.include_subdecks !== false;
+  tr.querySelector(".mature").value = String(rule?.mature_interval_days ?? 21);
+  tr.querySelector(".remove").addEventListener("click", () => onRemove(tr));
+
+  tr.addEventListener("click", (e) => {
+    if (e.target && e.target.closest && e.target.closest("button.remove")) return;
+    setWizardActiveRuleRow(tr);
+  });
+
+  return tr;
+}
+
+function populateWizardRulesTable(rules) {
+  const body = $("wiz-rules-body");
+  if (!body) return;
+  body.innerHTML = "";
+  const onRemove = (tr) => {
+    const wasActive = wizardActiveRuleRow === tr;
+    tr.remove();
+    if (wasActive) ensureWizardActiveRow();
+  };
+  const list =
+    Array.isArray(rules) && rules.length
+      ? rules
+      : [{ rule_id: "default", deck_paths: [], include_subdecks: true, note_types: [], target_field: "", mature_interval_days: 21 }];
+  for (const r of list) body.appendChild(wizardRuleRow(r, onRemove));
+  const first = body.querySelector("tr");
+  if (first) setWizardActiveRuleRow(first);
+}
+
+function readWizardRulesFromTable() {
+  const body = $("wiz-rules-body");
+  if (!body) return [];
+  const rules = [];
+  for (const tr of body.querySelectorAll("tr")) {
+    const rid = tr.querySelector(".rid").value.trim() || "default";
+    const deckPaths = tr
+      .querySelector(".decks")
+      .value.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const targetField = tr.querySelector(".field").value.trim();
+    const noteTypes = tr
+      .querySelector(".notetypes")
+      .value.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const includeSubdecks = tr.querySelector(".subdecks").checked;
+    const mature = Number(tr.querySelector(".mature").value || "21");
+    if (!deckPaths.length || !targetField) continue;
+    rules.push({
+      rule_id: rid,
+      deck_paths: deckPaths,
+      include_subdecks: includeSubdecks,
+      note_types: noteTypes,
+      target_field: targetField,
+      mature_interval_days: Number.isFinite(mature) ? Math.max(1, Math.trunc(mature)) : 21,
+    });
+  }
+  return rules;
+}
+
+function readWizardRulesDraftFromTable() {
+  const body = $("wiz-rules-body");
+  if (!body) return [];
+  const rules = [];
+  for (const tr of body.querySelectorAll("tr")) {
+    const rid = tr.querySelector(".rid").value.trim() || "default";
+    const deckPaths = tr
+      .querySelector(".decks")
+      .value.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const targetField = tr.querySelector(".field").value.trim();
+    const noteTypes = tr
+      .querySelector(".notetypes")
+      .value.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const includeSubdecks = tr.querySelector(".subdecks").checked;
+    const mature = Number(tr.querySelector(".mature").value || "21");
+    rules.push({
+      rule_id: rid,
+      deck_paths: deckPaths,
+      include_subdecks: includeSubdecks,
+      note_types: noteTypes,
+      target_field: targetField,
+      mature_interval_days: Number.isFinite(mature) ? Math.max(1, Math.trunc(mature)) : 21,
+    });
+  }
+  return rules;
+}
+
 function getAnkiProfileFromUi() {
   const raw = ($("anki-profile")?.value || "").trim();
   return raw || "User 1";
+}
+
+function populateThemeSelect() {
+  const sel = $("report-theme");
+  if (!sel) return;
+  sel.innerHTML = "";
+  for (const opt of THEME_OPTIONS) {
+    const o = document.createElement("option");
+    o.value = opt.id;
+    o.textContent = opt.label;
+    sel.appendChild(o);
+  }
+}
+
+function getDefaultConfig() {
+  return {
+    anki_profile: "User 1",
+    timezone: "local",
+    theme: "dark-graphite",
+    output_dir: "",
+    one_page: true,
+    hashi: {
+      host: "127.0.0.1",
+      port: 8766,
+      token: null,
+      refresh_timeout_ms: 10000,
+      require_fresh: true,
+    },
+    toggl: {
+      start_date: "auto",
+      refresh_days_back: 60,
+      refresh_buffer_days: 2,
+      chunk_days: 7,
+      baseline_hours: 0,
+    },
+    mokuro: { enabled: false, volume_data_path: "" },
+    ttsu: { enabled: false, data_dir: "" },
+    gsm: { enabled: false, db_path: "auto" },
+    anki_snapshot: { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] },
+    launch: { open_on_startup: false, start_minimized_to_tray: false, close_minimizes_to_tray: false },
+  };
 }
 
 async function refreshAnkiProfiles() {
@@ -103,7 +287,7 @@ function renderGettingStartedCard(card) {
 
       <div class="subhead">Step 1: Setup</div>
       <div class="hint">
-        Add your Toggl token (optional), configure Anki snapshot rules, then click <b>Save config.json</b>.
+        Add your Toggl token (required), configure Anki snapshot rules (optional), then click <b>Save config.json</b>.
       </div>
 
       <div class="subhead">Step 2: Sources</div>
@@ -166,7 +350,7 @@ function renderGettingStartedCardV2(card) {
 
     <div class="subhead">Step 1: Setup</div>
     <div class="hint">
-      Add your Toggl token (optional), configure Anki snapshot rules, then click Save to write <code>config.json</code>.
+      Add your Toggl token (required), configure Anki snapshot rules (optional), then click Save to write <code>config.json</code>.
     </div>
     <div class="hint">
       Anki stats can come from the built-in snapshot exporter (enable + add rules), or from the Hashi add-on (advanced).
@@ -501,6 +685,7 @@ function renderDiscoveredAnki(payload) {
 async function loadEnv() {
   const env = await api("GET", "/api/env");
   if (!env.ok) return;
+  currentEnv = env;
   $("env-appRoot").textContent = env.appRoot;
   $("env-userRoot").textContent = env.userRoot;
   $("env-platform").textContent = env.platform;
@@ -543,16 +728,50 @@ function discardConfigChanges() {
 
 async function loadConfig() {
   const r = await api("GET", "/api/config");
+  let cfg = null;
   if (!r.ok) {
-    setStatus($("config-status"), r.error || "Failed to load config.", "bad");
-    return null;
+    if (r.error === "missing") {
+      cfg = getDefaultConfig();
+      setStatus(
+        $("config-status"),
+        `config.json not found yet. Use “Open setup wizard” or click “Save config.json” to create it in ${r.path || "your user folder"}.`,
+        "bad"
+      );
+    } else {
+      setStatus($("config-status"), r.error || "Failed to load config.", "bad");
+      return null;
+    }
+  } else {
+    cfg = r.config || {};
   }
-  const cfg = r.config || {};
 
   const launch = cfg.launch && typeof cfg.launch === "object" ? cfg.launch : {};
   $("launch-open-on-startup").checked = launch.open_on_startup === true;
   $("launch-start-minimized").checked = launch.start_minimized_to_tray === true;
   $("launch-close-minimizes").checked = launch.close_minimizes_to_tray === true;
+
+  const rawOut = typeof cfg.output_dir === "string" ? cfg.output_dir : "";
+  if ($("report-output-dir")) $("report-output-dir").value = rawOut;
+  const tz = typeof cfg.timezone === "string" && cfg.timezone.trim() ? cfg.timezone.trim() : "local";
+  if ($("report-timezone")) $("report-timezone").value = tz;
+
+  populateThemeSelect();
+  const themeRaw = typeof cfg.theme === "string" && cfg.theme.trim() ? cfg.theme.trim() : "dark-graphite";
+  const themeSel = $("report-theme");
+  if (themeSel) {
+    const has = Array.from(themeSel.options).some((o) => o.value === themeRaw);
+    if (!has) {
+      const custom = document.createElement("option");
+      custom.value = themeRaw;
+      custom.textContent = themeRaw;
+      themeSel.appendChild(custom);
+    }
+    themeSel.value = themeRaw;
+  }
+
+  const hashi = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
+  const requireFresh = hashi.require_fresh === false ? false : true;
+  if ($("anki-nonblocking")) $("anki-nonblocking").checked = !requireFresh;
 
   const toggl = cfg.toggl && typeof cfg.toggl === "object" ? cfg.toggl : {};
   const baselineHours = Number(toggl.baseline_hours || 0);
@@ -602,6 +821,13 @@ async function saveConfig(currentCfg) {
   cfg.launch.open_on_startup = $("launch-open-on-startup").checked;
   cfg.launch.start_minimized_to_tray = $("launch-start-minimized").checked;
   cfg.launch.close_minimizes_to_tray = $("launch-close-minimizes").checked;
+
+  cfg.output_dir = ($("report-output-dir")?.value || "").trim();
+  cfg.timezone = ($("report-timezone")?.value || "").trim() || "local";
+  cfg.theme = ($("report-theme")?.value || "").trim() || "dark-graphite";
+
+  cfg.hashi = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
+  cfg.hashi.require_fresh = $("anki-nonblocking")?.checked ? false : true;
 
   cfg.toggl = cfg.toggl && typeof cfg.toggl === "object" ? cfg.toggl : {};
   const baselineText = ($("toggl-baseline-hms")?.value || "").trim();
@@ -1103,6 +1329,1010 @@ async function openTarget(target) {
   await api("POST", "/api/open", { target });
 }
 
+function showWizardOverlay(show) {
+  const overlay = $("wizard-overlay");
+  if (!overlay) return;
+  overlay.hidden = !show;
+  overlay.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
+function showWizardExitOverlay(show) {
+  const overlay = $("wizard-exit-overlay");
+  if (!overlay) return;
+  overlay.hidden = !show;
+  overlay.setAttribute("aria-hidden", show ? "false" : "true");
+  if (!show) setStatus($("wizard-exit-error"), "", null);
+}
+
+function wizardSetError(msg) {
+  const el = $("wizard-error");
+  if (!el) return;
+  el.textContent = msg || "";
+}
+
+function wizardSetStatus(msg, kind) {
+  setStatus($("wizard-status"), msg, kind);
+}
+
+const WIZARD_STEP_TITLES = ["Welcome", "Choose sources", "Connect sources", "Finish"];
+
+const wizardState = {
+  open: false,
+  step: 0,
+  forced: false,
+  configMissing: false,
+  includeAnki: true,
+  includeMokuro: false,
+  includeTtsu: false,
+  includeGsm: false,
+  togglToken: "",
+  togglBaselineHms: "",
+  ankiProfile: "User 1",
+  ankiRulesDraft: [],
+  ankiRules: [],
+  mokuroPath: "",
+  ttsuPath: "",
+  outputDir: "",
+  timezone: "local",
+  theme: "dark-graphite",
+  discovered: null,
+};
+
+async function refreshWizardConfigMissing() {
+  const r = await api("GET", "/api/config");
+  wizardState.configMissing = !r.ok && r.error === "missing";
+  return wizardState.configMissing;
+}
+
+function renderWizardSteps() {
+  const box = $("wizard-steps");
+  if (!box) return;
+  box.innerHTML = "";
+  for (let i = 0; i < WIZARD_STEP_TITLES.length; i++) {
+    const el = document.createElement("div");
+    el.className = "wizard-step" + (i === wizardState.step ? " active" : i < wizardState.step ? " done" : "");
+    el.textContent = `${i + 1}. ${WIZARD_STEP_TITLES[i]}`;
+    box.appendChild(el);
+  }
+}
+
+function wizardBodySet(html) {
+  const body = $("wizard-body");
+  if (!body) return;
+  body.innerHTML = html;
+}
+
+function dedupeLower(list) {
+  const out = [];
+  const seen = new Set();
+  for (const v of list || []) {
+    const s = String(v || "").trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+async function wizardDiscoverAnki() {
+  wizardSetError("");
+  wizardCaptureConnectFromUi();
+  const status = $("wiz-anki-discover-status");
+  setStatus(status, "Discovering...", null);
+  const profile = ($("wiz-anki-profile")?.value || "").trim() || "User 1";
+  const r = await api("POST", "/api/anki/discover", { profile });
+  if (!r.ok || !r.payload || r.payload.ok !== true) {
+    setStatus(status, (r.payload && r.payload.error) || r.stderr || "Discover failed.", "bad");
+    wizardState.discovered = null;
+    renderWizard();
+    return;
+  }
+  wizardState.discovered = r.payload;
+  setStatus(status, "OK. Click a deck and a word field to fill the rule.", "good");
+  renderWizard();
+}
+
+async function wizardRefreshAnkiProfiles() {
+  const select = $("wiz-anki-profile-select");
+  if (!select) return;
+
+  const r = await api("GET", "/api/anki/profiles");
+  const profiles = Array.isArray(r.profiles) ? r.profiles : [];
+  const current = ($("wiz-anki-profile")?.value || "").trim();
+
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = profiles.length ? "(select a profile)" : "(no profiles detected)";
+  select.appendChild(placeholder);
+
+  for (const p of profiles) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    select.appendChild(opt);
+  }
+
+  if (profiles.includes(current)) select.value = current;
+}
+
+function renderWizardDiscoveredAnki() {
+  const root = $("wiz-anki-discovered");
+  if (!root) return;
+  const payload = wizardState.discovered;
+  if (!payload) {
+    root.hidden = true;
+    $("wiz-anki-decks").innerHTML = "";
+    $("wiz-anki-notetypes").innerHTML = "";
+    $("wiz-anki-fields").innerHTML = "";
+    return;
+  }
+
+  root.hidden = false;
+  const decks = normalizeList(payload.decks)
+    .map((d) => String((d && typeof d === "object" ? d.name : d) || ""))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const noteTypes = normalizeList(payload.note_types).map((nt) => String(nt?.name || "")).filter(Boolean);
+
+  const fields = [];
+  for (const nt of normalizeList(payload.note_types)) {
+    for (const f of normalizeList(nt?.fields)) fields.push(String(f || ""));
+  }
+  const uniqueFields = [...new Set(fields.map((x) => x.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  $("wiz-anki-decks").innerHTML = "";
+  $("wiz-anki-notetypes").innerHTML = "";
+  $("wiz-anki-fields").innerHTML = "";
+
+  for (const d of decks) {
+    $("wiz-anki-decks").appendChild(
+      makeChip(d, async (e) => {
+        if (e.shiftKey) {
+          const ok = await copyText(d);
+          setStatus($("wiz-anki-discover-status"), ok ? `Copied deck: ${d}` : "Copy failed.", ok ? "good" : "bad");
+          return;
+        }
+        const row = ensureWizardActiveRow();
+        if (!row) return;
+        const input = row.querySelector(".decks");
+        const curr = parseCommaList(input.value);
+        curr.push(d);
+        setCommaListInput(input, curr);
+        wizardSetError("");
+      })
+    );
+  }
+
+  for (const nt of noteTypes) {
+    $("wiz-anki-notetypes").appendChild(
+      makeChip(nt, async (e) => {
+        if (e.shiftKey) {
+          const ok = await copyText(nt);
+          setStatus($("wiz-anki-discover-status"), ok ? `Copied note type: ${nt}` : "Copy failed.", ok ? "good" : "bad");
+          return;
+        }
+        const row = ensureWizardActiveRow();
+        if (!row) return;
+        const input = row.querySelector(".notetypes");
+        const curr = parseCommaList(input.value);
+        curr.push(nt);
+        setCommaListInput(input, curr);
+        wizardSetError("");
+      })
+    );
+  }
+
+  for (const f of uniqueFields) {
+    $("wiz-anki-fields").appendChild(
+      makeChip(f, async (e) => {
+        if (e.shiftKey) {
+          const ok = await copyText(f);
+          setStatus($("wiz-anki-discover-status"), ok ? `Copied field: ${f}` : "Copy failed.", ok ? "good" : "bad");
+          return;
+        }
+        const row = ensureWizardActiveRow();
+        if (!row) return;
+        row.querySelector(".field").value = f;
+        wizardSetError("");
+      })
+    );
+  }
+}
+
+async function createConfigFromWizard() {
+  wizardSetError("");
+  const status = $("wiz-create-status");
+  setStatus(status, "Creating config...", null);
+  const cfg = getDefaultConfig();
+  const r = await api("POST", "/api/config", cfg);
+  if (!r.ok) {
+    setStatus(status, r.error || "Failed to create config.", "bad");
+    return false;
+  }
+  setStatus(status, "Created.", "good");
+  currentConfig = (await loadConfig()) || currentConfig;
+  await refreshWizardConfigMissing();
+  await renderWizard();
+  return true;
+}
+
+function wizardApplyStep2ChoicesToUi() {
+  const ankiIncluded = wizardState.includeAnki;
+  if ($("anki-enabled")) $("anki-enabled").checked = ankiIncluded;
+  if ($("anki-nonblocking")) $("anki-nonblocking").checked = !ankiIncluded;
+
+  if ($("mokuro-enabled")) $("mokuro-enabled").checked = wizardState.includeMokuro;
+  if ($("ttsu-enabled")) $("ttsu-enabled").checked = wizardState.includeTtsu;
+  if ($("gsm-enabled")) $("gsm-enabled").checked = wizardState.includeGsm;
+}
+
+async function wizardSaveToken() {
+  const token = (wizardState.togglToken || "").trim();
+  if (!token) return { ok: false, error: "Enter your Toggl API token to continue." };
+  const r = await api("POST", "/api/toggl-token", { token });
+  if (!r.ok) return { ok: false, error: r.error || "Failed to save token." };
+  $("toggl-token").value = token;
+  setStatus($("toggl-status"), "Saved.", "good");
+  return { ok: true };
+}
+
+function wizardApplyReportSettingsToUi() {
+  if ($("report-output-dir")) $("report-output-dir").value = wizardState.outputDir || "";
+  if ($("report-timezone")) $("report-timezone").value = wizardState.timezone || "local";
+  populateThemeSelect();
+  if ($("report-theme")) $("report-theme").value = wizardState.theme || "dark-graphite";
+}
+
+function wizardApplyAnkiToUi() {
+  const profile = (wizardState.ankiProfile || "").trim() || "User 1";
+  const rules = Array.isArray(wizardState.ankiRules) ? wizardState.ankiRules : [];
+
+  if (!wizardState.includeAnki) {
+    if ($("anki-enabled")) $("anki-enabled").checked = false;
+    if ($("anki-nonblocking")) $("anki-nonblocking").checked = true;
+    return { ok: true };
+  }
+
+  if (!profile) return { ok: false, error: "Choose your Anki profile to continue." };
+  if (!rules.length) return { ok: false, error: "Add at least one Anki rule (deck + word field) to continue." };
+
+  if ($("anki-enabled")) $("anki-enabled").checked = true;
+  if ($("anki-nonblocking")) $("anki-nonblocking").checked = false;
+  if ($("anki-profile")) $("anki-profile").value = profile;
+
+  populateRulesTable(rules);
+
+  return { ok: true };
+}
+
+function wizardApplyOptionalSourcesToUi() {
+  if (wizardState.includeMokuro) {
+    const p = (wizardState.mokuroPath || "").trim();
+    if ($("mokuro-path")) $("mokuro-path").value = p;
+    if ($("mokuro-enabled")) $("mokuro-enabled").checked = true;
+  } else if ($("mokuro-enabled")) {
+    $("mokuro-enabled").checked = false;
+  }
+
+  if (wizardState.includeTtsu) {
+    const p = (wizardState.ttsuPath || "").trim();
+    if ($("ttsu-path")) $("ttsu-path").value = p;
+    if ($("ttsu-enabled")) $("ttsu-enabled").checked = true;
+  } else if ($("ttsu-enabled")) {
+    $("ttsu-enabled").checked = false;
+  }
+
+  if ($("gsm-enabled")) $("gsm-enabled").checked = wizardState.includeGsm;
+}
+
+async function wizardFinishAndSave() {
+  wizardSetError("");
+  wizardApplyStep2ChoicesToUi();
+  wizardApplyOptionalSourcesToUi();
+  wizardApplyReportSettingsToUi();
+
+  if (wizardState.togglBaselineHms) {
+    if ($("toggl-baseline-hms")) $("toggl-baseline-hms").value = wizardState.togglBaselineHms;
+  }
+
+  const tokenRes = await wizardSaveToken();
+  if (!tokenRes.ok) return tokenRes;
+
+  const ankiRes = wizardApplyAnkiToUi();
+  if (!ankiRes.ok) return ankiRes;
+
+  if (wizardState.configMissing) {
+    const ok = await createConfigFromWizard();
+    if (!ok) return { ok: false, error: "Could not create config.json." };
+  }
+
+  try {
+    await saveConfig(currentConfig);
+    currentConfig = (await loadConfig()) || currentConfig;
+    try {
+      localStorage.setItem(WIZARD_SEEN_KEY, "1");
+    } catch {
+      // ignore
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+async function wizardSavePartialConfigForAnkiTest() {
+  wizardCaptureConnectFromUi();
+
+  if (wizardState.configMissing) {
+    const ok = await createConfigFromWizard();
+    if (!ok) return { ok: false, error: "Could not create config.json." };
+  }
+
+  const tokenRes = await wizardSaveToken();
+  if (!tokenRes.ok) return tokenRes;
+
+  wizardApplyStep2ChoicesToUi();
+  wizardApplyOptionalSourcesToUi();
+  wizardApplyReportSettingsToUi();
+
+  if (wizardState.togglBaselineHms) {
+    if ($("toggl-baseline-hms")) $("toggl-baseline-hms").value = wizardState.togglBaselineHms;
+  }
+
+  const ankiRes = wizardApplyAnkiToUi();
+  if (!ankiRes.ok) return ankiRes;
+
+  await saveConfig(currentConfig);
+  currentConfig = (await loadConfig()) || currentConfig;
+  return { ok: true };
+}
+
+function wizardReadStep2FromUi() {
+  wizardState.includeAnki = $("wiz-src-anki")?.checked !== false;
+  wizardState.includeMokuro = $("wiz-src-mokuro")?.checked === true;
+  wizardState.includeTtsu = $("wiz-src-ttsu")?.checked === true;
+  wizardState.includeGsm = $("wiz-src-gsm")?.checked === true;
+}
+
+function wizardCaptureConnectFromUi() {
+  wizardState.togglToken = ($("wiz-toggl-token")?.value || "").trim();
+  wizardState.togglBaselineHms = ($("wiz-toggl-baseline")?.value || "").trim();
+
+  if (wizardState.includeAnki) {
+    wizardState.ankiProfile = ($("wiz-anki-profile")?.value || "").trim() || "User 1";
+    wizardState.ankiRulesDraft = readWizardRulesDraftFromTable();
+    wizardState.ankiRules = readWizardRulesFromTable();
+  } else {
+    wizardState.ankiRulesDraft = [];
+    wizardState.ankiRules = [];
+  }
+
+  wizardState.mokuroPath = ($("wiz-mokuro-path")?.value || "").trim();
+  wizardState.ttsuPath = ($("wiz-ttsu-path")?.value || "").trim();
+}
+
+function wizardReadStep4FromUi() {
+  wizardState.outputDir = ($("wiz-output")?.value || "").trim();
+  wizardState.timezone = ($("wiz-timezone")?.value || "").trim() || "local";
+  wizardState.theme = ($("wiz-theme")?.value || "").trim() || "dark-graphite";
+}
+
+async function wizardPickInto(inputId, title) {
+  const p = await pickPath("folder", title);
+  if (!p) return;
+  const input = $(inputId);
+  if (input) input.value = p;
+}
+
+async function renderWizard() {
+  await refreshWizardConfigMissing();
+  renderWizardSteps();
+  wizardSetError("");
+
+  const closeBtn = $("wizard-close");
+  if (closeBtn) closeBtn.disabled = wizardState.forced && wizardState.configMissing;
+
+  const backBtn = $("wizard-back");
+  const nextBtn = $("wizard-next");
+  if (backBtn) backBtn.disabled = wizardState.step === 0;
+
+  if (nextBtn) {
+    nextBtn.textContent = wizardState.step === 3 ? "Save and finish" : "Next";
+  }
+
+  if (wizardState.step === 0) {
+    const cfgPath = currentEnv?.userRoot ? `${currentEnv.userRoot}\\config.json` : "config.json";
+    const userRoot = currentEnv?.userRoot || "(unknown)";
+    wizardBodySet(`
+      <div class="wizard-section">
+        <div class="wizard-h1">Welcome to Tokei</div>
+        <div class="wizard-p">Tokei needs a setup file before it can build your dashboard.</div>
+        <div class="wizard-p">Status: <b>${wizardState.configMissing ? "Not found yet" : "Found"}</b></div>
+        <div class="wizard-p">We will save it here:</div>
+        <div class="wizard-code"><code>${escapeHtml(cfgPath)}</code></div>
+        <div class="wizard-row">
+          <button id="wiz-create" class="btn primary" type="button">Create config</button>
+          <button id="wiz-open-folder" class="btn" type="button">Open config folder</button>
+          <div id="wiz-create-status" class="status"></div>
+        </div>
+        <div class="wizard-p">If you already have a config file, you can place it in:</div>
+        <div class="wizard-code"><code>${escapeHtml(userRoot)}</code></div>
+      </div>
+    `);
+
+    $("wiz-create")?.addEventListener("click", async () => {
+      await createConfigFromWizard();
+    });
+    $("wiz-open-folder")?.addEventListener("click", async () => {
+      if (!currentEnv?.userRoot) return;
+      await openTarget(currentEnv.userRoot);
+    });
+    return;
+  }
+
+  if (wizardState.step === 1) {
+    wizardBodySet(`
+      <div class="wizard-section">
+        <div class="wizard-h1">Choose what to include</div>
+        <div class="wizard-p">Toggl hours are required. Everything else is optional.</div>
+
+        <div class="wizard-checks">
+          <label class="check"><input id="wiz-src-anki" type="checkbox" /> Include Anki stats (reviews + retention)</label>
+          <label class="check"><input id="wiz-src-mokuro" type="checkbox" /> Include Mokuro (manga reading)</label>
+          <label class="check"><input id="wiz-src-ttsu" type="checkbox" /> Include Ttsu Reader (novel reading)</label>
+          <label class="check"><input id="wiz-src-gsm" type="checkbox" /> Include GameSentenceMiner (GSM)</label>
+        </div>
+
+        <div class="wizard-note">
+          If you turn off Anki stats, Tokei will not block report generation when Anki isn’t set up.
+        </div>
+      </div>
+    `);
+
+    $("wiz-src-anki").checked = wizardState.includeAnki;
+    $("wiz-src-mokuro").checked = wizardState.includeMokuro;
+    $("wiz-src-ttsu").checked = wizardState.includeTtsu;
+    $("wiz-src-gsm").checked = wizardState.includeGsm;
+    return;
+  }
+
+  if (wizardState.step === 2) {
+    const ankiSection = wizardState.includeAnki
+      ? `
+        <div class="wizard-section">
+          <div class="wizard-h1">Anki stats</div>
+          <div class="wizard-p">Choose your Anki profile, then add one or more rules.</div>
+
+          <div class="wizard-row">
+            <div style="flex: 1; min-width: 220px">
+              <div class="subhead">Anki profile</div>
+              <input id="wiz-anki-profile" class="input" type="text" placeholder="Example: User 1" />
+            </div>
+            <div style="flex: 1; min-width: 220px">
+              <div class="subhead">Detected profiles</div>
+              <select id="wiz-anki-profile-select" class="input">
+                <option value="">(detect profiles)</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: flex-end; gap: 10px">
+              <button id="wiz-anki-profiles-refresh" class="btn" type="button">Detect</button>
+            </div>
+          </div>
+
+          <div class="wizard-row">
+            <button id="wiz-anki-discover" class="btn" type="button">Discover decks/fields</button>
+            <button id="wiz-anki-test" class="btn" type="button">Test export</button>
+            <div id="wiz-anki-discover-status" class="status"></div>
+            <div id="wiz-anki-test-status" class="status"></div>
+          </div>
+
+          <div class="wizard-p">
+            Add one or more rules below. We strongly recommend tracking a <b>word field</b> (Expression / Vocab / Word), not a sentence field.
+          </div>
+
+          <div class="rules">
+            <table class="rules-table">
+              <thead>
+                <tr>
+                  <th>Rule ID</th>
+                  <th>Deck paths (comma-separated)</th>
+                  <th>Target field</th>
+                  <th>Note types (optional, comma-separated)</th>
+                  <th>Subdecks</th>
+                  <th>Mature days</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="wiz-rules-body"></tbody>
+            </table>
+            <div class="wizard-row">
+              <button id="wiz-rule-add" class="btn" type="button">Add rule</button>
+            </div>
+          </div>
+
+          <div class="wizard-p">
+            Tip: click a rule row to select it, then click items below to fill it. Shift+click copies to clipboard.
+          </div>
+
+          <div id="wiz-anki-discovered" class="discovered" hidden>
+            <div class="discover-grid">
+              <div>
+                <div class="subhead">Decks</div>
+                <div id="wiz-anki-decks" class="chips"></div>
+              </div>
+              <div>
+                <div class="subhead">Note types</div>
+                <div id="wiz-anki-notetypes" class="chips"></div>
+              </div>
+              <div>
+                <div class="subhead">Fields</div>
+                <div id="wiz-anki-fields" class="chips"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+      : `
+        <div class="wizard-section">
+          <div class="wizard-h1">Anki stats</div>
+          <div class="wizard-p">You turned off Anki stats. Reports will still run, and Anki numbers will show as 0.</div>
+        </div>
+      `;
+
+    wizardBodySet(`
+      <div class="wizard-section">
+        <div class="wizard-h1">Toggl</div>
+        <div class="wizard-p">Enter your Toggl API token. You can find it in Toggl: Profile → Profile settings → API token.</div>
+        <div class="wizard-row">
+          <input id="wiz-toggl-token" class="input" type="password" placeholder="Toggl API token" />
+          <button id="wiz-toggl-show" class="btn" type="button">Show</button>
+          <button id="wiz-toggl-open" class="btn" type="button">Open Toggl Summary</button>
+        </div>
+        <div class="wizard-p">
+          If you’ve used Toggl for more than 60 days, it’s recommended to enter a one-time lifetime baseline (through yesterday).
+        </div>
+        <div class="wizard-row">
+          <input id="wiz-toggl-baseline" class="input" type="text" placeholder="Lifetime baseline HH:MM:SS (optional)" />
+        </div>
+      </div>
+
+      ${ankiSection}
+
+      <div class="wizard-section">
+        <div class="wizard-h1">Reading sources (optional)</div>
+        <div class="wizard-p">
+          For Mokuro and Ttsu, we strongly recommend syncing their folders with Google Drive so your data stays up to date.
+        </div>
+        <div class="wizard-p">
+          This requires Google Drive for Desktop (so the folders exist as normal folders on your PC). The website alone is not enough.
+        </div>
+        <div class="wizard-row">
+          <button id="wiz-open-drive" class="btn" type="button">Download Google Drive for Desktop</button>
+        </div>
+
+        <div class="wizard-sub" ${wizardState.includeMokuro ? "" : "hidden"}>
+          <div class="wizard-h2">Mokuro</div>
+          <div class="wizard-row">
+            <input id="wiz-mokuro-path" class="input" type="text" placeholder="Path to mokuro-reader folder" />
+            <button id="wiz-mokuro-browse" class="btn" type="button">Browse…</button>
+          </div>
+          <div class="wizard-note">Tip: If you use Google Drive for Desktop, your Drive is often <code>G:\\</code>.</div>
+        </div>
+
+        <div class="wizard-sub" ${wizardState.includeTtsu ? "" : "hidden"}>
+          <div class="wizard-h2">Ttsu Reader</div>
+          <div class="wizard-row">
+            <input id="wiz-ttsu-path" class="input" type="text" placeholder="Path to ttu-reader-data folder" />
+            <button id="wiz-ttsu-browse" class="btn" type="button">Browse…</button>
+          </div>
+          <div class="wizard-note">Tip: If you use Google Drive for Desktop, your Drive is often <code>G:\\</code>.</div>
+        </div>
+
+        <div class="wizard-sub" ${wizardState.includeGsm ? "" : "hidden"}>
+          <div class="wizard-h2">GameSentenceMiner (GSM)</div>
+          <div class="wizard-p">
+            Sometimes GSM’s database doesn’t update the same day. Our “GSM live sessions” helper can keep today’s numbers up to date while you read.
+          </div>
+          <div class="wizard-row">
+            <button id="wiz-gsm-install" class="btn primary" type="button">Install GSM live sessions</button>
+            <button id="wiz-gsm-copy-shim" class="btn" type="button">Copy plugins.py shim</button>
+            <div id="wiz-gsm-status" class="status"></div>
+          </div>
+          <div class="wizard-note">
+            After installing, paste the shim into GSM’s <code>plugins.py</code> (Setup tab → GSM live sessions → Advanced can help).
+          </div>
+        </div>
+      </div>
+    `);
+
+    $("wiz-toggl-token").value = wizardState.togglToken || $("toggl-token")?.value || "";
+    $("wiz-toggl-baseline").value = wizardState.togglBaselineHms || $("toggl-baseline-hms")?.value || "";
+
+    $("wiz-toggl-show")?.addEventListener("click", () => {
+      const input = $("wiz-toggl-token");
+      if (!input) return;
+      const reveal = input.type === "password";
+      input.type = reveal ? "text" : "password";
+      $("wiz-toggl-show").textContent = reveal ? "Hide" : "Show";
+    });
+
+    $("wiz-toggl-open")?.addEventListener("click", async () => {
+      await api("POST", "/api/open", { target: "https://track.toggl.com/reports/summary" });
+    });
+
+    $("wiz-open-drive")?.addEventListener("click", async () => {
+      await api("POST", "/api/open", { target: "https://workspace.google.com/products/drive/" });
+    });
+
+    $("wiz-mokuro-browse")?.addEventListener("click", async () => wizardPickInto("wiz-mokuro-path", "Select Mokuro folder (mokuro-reader)"));
+    $("wiz-ttsu-browse")?.addEventListener("click", async () => wizardPickInto("wiz-ttsu-path", "Select Ttsu ttu-reader-data folder"));
+
+    if (wizardState.includeGsm) {
+      $("wiz-gsm-install")?.addEventListener("click", async () => {
+        const st = $("wiz-gsm-status");
+        setStatus(st, "Installing...", null);
+        const r = await api("POST", "/api/gsm/install-helper", {});
+        if (!r.ok) return setStatus(st, r.error || "Install failed.", "bad");
+        const msg = r.changed ? "Installed. Next: paste the shim into plugins.py." : "Already installed.";
+        return setStatus(st, msg, "good");
+      });
+      $("wiz-gsm-copy-shim")?.addEventListener("click", async () => {
+        const st = $("wiz-gsm-status");
+        setStatus(st, "Copying...", null);
+        const r = await api("GET", "/api/gsm/plugin-snippet");
+        if (!r.ok) return setStatus(st, r.error || "Failed.", "bad");
+        const text = String(r.snippet || "");
+        try {
+          await copyText(text);
+          setStatus(st, "Copied. Paste into plugins.py.", "good");
+        } catch (e) {
+          setStatus(st, String(e?.message || e), "bad");
+        }
+      });
+    }
+
+    if (wizardState.includeAnki) {
+      $("wiz-anki-profile").value = wizardState.ankiProfile || getAnkiProfileFromUi();
+      populateWizardRulesTable(wizardState.ankiRulesDraft);
+
+      $("wiz-anki-profiles-refresh")?.addEventListener("click", async () => {
+        setStatus($("wiz-anki-discover-status"), "Detecting profiles...", null);
+        await wizardRefreshAnkiProfiles();
+        const select = $("wiz-anki-profile-select");
+        const profiles = select ? Array.from(select.options).map((o) => o.value).filter(Boolean) : [];
+        setStatus(
+          $("wiz-anki-discover-status"),
+          profiles.length ? "Profiles detected. Select one from the dropdown." : "No profiles detected. Type it manually (example: User 1).",
+          profiles.length ? "good" : "bad"
+        );
+      });
+
+      $("wiz-anki-profile-select")?.addEventListener("change", () => {
+        const v = ($("wiz-anki-profile-select")?.value || "").trim();
+        if (!v) return;
+        const input = $("wiz-anki-profile");
+        if (input) input.value = v;
+      });
+
+      $("wiz-anki-discover")?.addEventListener("click", wizardDiscoverAnki);
+      $("wiz-anki-test")?.addEventListener("click", async () => {
+        const st = $("wiz-anki-test-status");
+        setStatus(st, "Testing...", null);
+        const prep = await wizardSavePartialConfigForAnkiTest();
+        if (!prep.ok) return setStatus(st, prep.error || "Setup not ready.", "bad");
+        const r = await api("POST", "/api/anki/test-export", {});
+        if (r.ok) setStatus(st, "OK. Anki export ran successfully.", "good");
+        else setStatus(st, r.message || r.error || r.stderr || "Test failed.", "bad");
+      });
+
+      $("wiz-rule-add")?.addEventListener("click", () => {
+        const body = $("wiz-rules-body");
+        if (!body) return;
+        const onRemove = (tr) => {
+          const wasActive = wizardActiveRuleRow === tr;
+          tr.remove();
+          if (wasActive) ensureWizardActiveRow();
+        };
+        body.appendChild(
+          wizardRuleRow(
+            {
+              rule_id: `rule_${body.children.length + 1}`,
+              deck_paths: [],
+              include_subdecks: true,
+              note_types: [],
+              target_field: "",
+              mature_interval_days: 21,
+            },
+            onRemove
+          )
+        );
+        const last = body.querySelector("tr:last-child");
+        if (last) setWizardActiveRuleRow(last);
+      });
+
+      await wizardRefreshAnkiProfiles();
+      renderWizardDiscoveredAnki();
+    }
+
+    return;
+  }
+
+  if (wizardState.step === 3) {
+    wizardBodySet(`
+      <div class="wizard-section">
+        <div class="wizard-h1">Finish setup</div>
+        <div class="wizard-p">Choose where reports are saved, then we’ll save your setup.</div>
+
+        <div class="wizard-row">
+          <input id="wiz-output" class="input" type="text" placeholder="Output folder (leave blank for default)" />
+          <button id="wiz-output-browse" class="btn" type="button">Browse…</button>
+        </div>
+
+        <div class="wizard-row">
+          <input id="wiz-timezone" class="input" type="text" placeholder="Timezone (local recommended)" />
+          <select id="wiz-theme" class="input"></select>
+          <button id="wiz-theme-samples" class="btn" type="button">Open theme samples</button>
+        </div>
+
+        <div class="wizard-note">
+          Summary: Toggl is required. Anki stats are ${wizardState.includeAnki ? "enabled" : "disabled"}. Reading sources: ${[
+            wizardState.includeMokuro ? "Mokuro" : null,
+            wizardState.includeTtsu ? "Ttsu" : null,
+            wizardState.includeGsm ? "GSM" : null,
+          ]
+            .filter(Boolean)
+            .join(", ") || "none"}.
+        </div>
+      </div>
+    `);
+
+    $("wiz-output").value = wizardState.outputDir || $("report-output-dir")?.value || "";
+    $("wiz-timezone").value = wizardState.timezone || $("report-timezone")?.value || "local";
+
+    const themeSel = $("wiz-theme");
+    if (themeSel) {
+      themeSel.innerHTML = "";
+      for (const opt of THEME_OPTIONS) {
+        const o = document.createElement("option");
+        o.value = opt.id;
+        o.textContent = opt.label;
+        themeSel.appendChild(o);
+      }
+      const current = wizardState.theme || $("report-theme")?.value || "dark-graphite";
+      const has = Array.from(themeSel.options).some((o) => o.value === current);
+      if (!has) {
+        const custom = document.createElement("option");
+        custom.value = current;
+        custom.textContent = current;
+        themeSel.appendChild(custom);
+      }
+      themeSel.value = current;
+    }
+
+    $("wiz-output-browse")?.addEventListener("click", async () => wizardPickInto("wiz-output", "Select output folder"));
+    $("wiz-theme-samples")?.addEventListener("click", async () => {
+      if (!currentEnv?.appRoot) return;
+      await openTarget(`${currentEnv.appRoot}\\samples`);
+    });
+    return;
+  }
+}
+
+async function openWizard({ forced = false } = {}) {
+  wizardState.forced = forced;
+  wizardState.step = 0;
+  wizardState.discovered = null;
+  await refreshWizardConfigMissing();
+
+  wizardApplyStep2ChoicesToUi();
+  wizardState.ankiProfile = getAnkiProfileFromUi();
+  wizardState.ankiRulesDraft = readRulesFromTable();
+  wizardState.ankiRules = wizardState.ankiRulesDraft.filter((r) => (r?.deck_paths || []).length && String(r?.target_field || "").trim());
+  wizardState.outputDir = ($("report-output-dir")?.value || "").trim();
+  wizardState.timezone = ($("report-timezone")?.value || "").trim() || "local";
+  wizardState.theme = ($("report-theme")?.value || "").trim() || "dark-graphite";
+  wizardLoadDraftFromLocalStorage();
+
+  wizardState.open = true;
+  await renderWizard();
+  showWizardOverlay(true);
+}
+
+async function closeWizard() {
+  await refreshWizardConfigMissing();
+  if (wizardState.forced && wizardState.configMissing) return;
+  showWizardExitOverlay(false);
+  showWizardOverlay(false);
+  wizardState.open = false;
+}
+
+function wizardShouldConfirmExit() {
+  if (!wizardState.open) return false;
+  if (wizardState.forced && wizardState.configMissing) return false;
+  return wizardState.step > 0;
+}
+
+async function wizardCaptureAllOpenStepInputs() {
+  if (wizardState.step === 1) wizardReadStep2FromUi();
+  if (wizardState.step === 2) wizardCaptureConnectFromUi();
+  if (wizardState.step === 3) wizardReadStep4FromUi();
+}
+
+function wizardPersistDraftToLocalStorage() {
+  try {
+    const draft = {
+      includeAnki: wizardState.includeAnki,
+      includeMokuro: wizardState.includeMokuro,
+      includeTtsu: wizardState.includeTtsu,
+      includeGsm: wizardState.includeGsm,
+      togglToken: wizardState.togglToken,
+      togglBaselineHms: wizardState.togglBaselineHms,
+      ankiProfile: wizardState.ankiProfile,
+      ankiRulesDraft: wizardState.ankiRulesDraft,
+      mokuroPath: wizardState.mokuroPath,
+      ttsuPath: wizardState.ttsuPath,
+      outputDir: wizardState.outputDir,
+      timezone: wizardState.timezone,
+      theme: wizardState.theme,
+    };
+    localStorage.setItem("tokei_wizard_draft_v1", JSON.stringify(draft));
+  } catch {
+    // ignore
+  }
+}
+
+function wizardLoadDraftFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem("tokei_wizard_draft_v1");
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return;
+    if (typeof parsed.includeAnki === "boolean") wizardState.includeAnki = parsed.includeAnki;
+    if (typeof parsed.includeMokuro === "boolean") wizardState.includeMokuro = parsed.includeMokuro;
+    if (typeof parsed.includeTtsu === "boolean") wizardState.includeTtsu = parsed.includeTtsu;
+    if (typeof parsed.includeGsm === "boolean") wizardState.includeGsm = parsed.includeGsm;
+    if (typeof parsed.togglToken === "string") wizardState.togglToken = parsed.togglToken;
+    if (typeof parsed.togglBaselineHms === "string") wizardState.togglBaselineHms = parsed.togglBaselineHms;
+    if (typeof parsed.ankiProfile === "string") wizardState.ankiProfile = parsed.ankiProfile;
+    if (Array.isArray(parsed.ankiRulesDraft)) wizardState.ankiRulesDraft = parsed.ankiRulesDraft;
+    if (typeof parsed.mokuroPath === "string") wizardState.mokuroPath = parsed.mokuroPath;
+    if (typeof parsed.ttsuPath === "string") wizardState.ttsuPath = parsed.ttsuPath;
+    if (typeof parsed.outputDir === "string") wizardState.outputDir = parsed.outputDir;
+    if (typeof parsed.timezone === "string") wizardState.timezone = parsed.timezone;
+    if (typeof parsed.theme === "string") wizardState.theme = parsed.theme;
+  } catch {
+    // ignore
+  }
+}
+
+async function wizardSaveDraftToDisk() {
+  await wizardCaptureAllOpenStepInputs();
+  wizardPersistDraftToLocalStorage();
+
+  await refreshWizardConfigMissing();
+  if (wizardState.configMissing) {
+    const ok = await createConfigFromWizard();
+    if (!ok) return { ok: false, error: "Could not create config.json." };
+  }
+
+  if (wizardState.togglToken) {
+    const rTok = await api("POST", "/api/toggl-token", { token: wizardState.togglToken });
+    if (!rTok.ok) return { ok: false, error: rTok.error || "Failed to save Toggl token." };
+  }
+
+  wizardApplyStep2ChoicesToUi();
+  wizardApplyOptionalSourcesToUi();
+  wizardApplyReportSettingsToUi();
+
+  if (wizardState.togglBaselineHms) {
+    try {
+      parseHmsToHours(wizardState.togglBaselineHms);
+      if ($("toggl-baseline-hms")) $("toggl-baseline-hms").value = wizardState.togglBaselineHms;
+    } catch {
+      // ignore invalid baseline in draft saves
+    }
+  }
+
+  if (wizardState.includeAnki) {
+    if ($("anki-profile")) $("anki-profile").value = wizardState.ankiProfile || "User 1";
+    populateRulesTable(Array.isArray(wizardState.ankiRulesDraft) ? wizardState.ankiRulesDraft : []);
+    const complete = readRulesFromTable();
+    if (!complete.length) {
+      if ($("anki-enabled")) $("anki-enabled").checked = false;
+      if ($("anki-nonblocking")) $("anki-nonblocking").checked = true;
+    }
+  }
+
+  await saveConfig(currentConfig);
+  currentConfig = (await loadConfig()) || currentConfig;
+  return { ok: true };
+}
+
+async function closeWizardWithOptionalConfirm() {
+  await refreshWizardConfigMissing();
+  if (wizardState.forced && wizardState.configMissing) return;
+  if (!wizardShouldConfirmExit()) return closeWizard();
+  showWizardExitOverlay(true);
+}
+
+async function wizardBack() {
+  wizardSetError("");
+  if (wizardState.step <= 0) return;
+  wizardState.step -= 1;
+  await renderWizard();
+}
+
+async function wizardNext() {
+  wizardSetError("");
+
+  if (wizardState.step === 0) {
+    if (wizardState.configMissing) {
+      wizardSetError("Click “Create config” to continue.");
+      return;
+    }
+    wizardState.step = 1;
+    await renderWizard();
+    return;
+  }
+
+  if (wizardState.step === 1) {
+    wizardReadStep2FromUi();
+    wizardApplyStep2ChoicesToUi();
+    wizardState.step = 2;
+    await renderWizard();
+    return;
+  }
+
+  if (wizardState.step === 2) {
+    wizardCaptureConnectFromUi();
+
+    if (!wizardState.togglToken) {
+      wizardSetError("Enter your Toggl API token to continue.");
+      return;
+    }
+
+    if (wizardState.togglBaselineHms) {
+      try {
+        parseHmsToHours(wizardState.togglBaselineHms);
+      } catch (e) {
+        wizardSetError(`Lifetime baseline time is invalid: ${String(e?.message || e)}`);
+        return;
+      }
+    }
+
+    if (wizardState.includeAnki) {
+      if (!wizardState.ankiProfile) {
+        wizardSetError("Choose your Anki profile to continue.");
+        return;
+      }
+      if (!wizardState.ankiRules.length) {
+        wizardSetError("Add at least one Anki rule (deck + word field) to continue.");
+        return;
+      }
+    }
+
+    wizardState.step = 3;
+    await renderWizard();
+    return;
+  }
+
+  if (wizardState.step === 3) {
+    wizardReadStep4FromUi();
+    const r = await wizardFinishAndSave();
+    if (!r.ok) {
+      wizardSetError(r.error || "Failed.");
+      return;
+    }
+    wizardSetStatus("Setup saved.", "good");
+    await closeWizard();
+    return;
+  }
+}
+
 function dirnameLite(p) {
   const s = String(p || "");
   const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
@@ -1162,6 +2392,44 @@ function wireUi() {
     togglBaselineSave.addEventListener("click", async () => {
       await saveConfig(currentConfig);
       currentConfig = (await loadConfig()) || currentConfig;
+    });
+  }
+
+  const reportOutputBrowse = $("report-output-browse");
+  if (reportOutputBrowse) {
+    reportOutputBrowse.addEventListener("click", async () => {
+      const p = await pickPath("folder", "Select output folder");
+      if (!p) return;
+      const input = $("report-output-dir");
+      if (input) input.value = p;
+    });
+  }
+
+  const reportOutputOpen = $("report-output-open");
+  if (reportOutputOpen) {
+    reportOutputOpen.addEventListener("click", async () => {
+      const paths = await api("GET", "/api/paths");
+      const outRoot = typeof paths?.outRoot === "string" ? paths.outRoot : "";
+      if (!outRoot) return;
+      await openTarget(outRoot);
+    });
+  }
+
+  const reportThemeSamples = $("report-theme-samples");
+  if (reportThemeSamples) {
+    reportThemeSamples.addEventListener("click", async () => {
+      if (!currentEnv?.appRoot) return;
+      await openTarget(`${currentEnv.appRoot}\\samples`);
+    });
+  }
+
+  const reportSave = $("report-save-config");
+  if (reportSave) {
+    reportSave.addEventListener("click", async () => {
+      setStatus($("report-save-status"), "Saving...", null);
+      await saveConfig(currentConfig);
+      currentConfig = (await loadConfig()) || currentConfig;
+      setStatus($("report-save-status"), "Saved.", "good");
     });
   }
 
@@ -1307,6 +2575,48 @@ function wireUi() {
   });
 
   relocateGettingStartedCard();
+
+  const wizardOpenBtn = $("wizard-open");
+  if (wizardOpenBtn) wizardOpenBtn.addEventListener("click", async () => openWizard({ forced: false }));
+  const wizardCloseBtn = $("wizard-close");
+  if (wizardCloseBtn) wizardCloseBtn.addEventListener("click", closeWizardWithOptionalConfirm);
+  const wizardBackBtn = $("wizard-back");
+  if (wizardBackBtn) wizardBackBtn.addEventListener("click", wizardBack);
+  const wizardNextBtn = $("wizard-next");
+  if (wizardNextBtn) wizardNextBtn.addEventListener("click", wizardNext);
+
+  const wizardExitSave = $("wizard-exit-save");
+  if (wizardExitSave) {
+    wizardExitSave.addEventListener("click", async () => {
+      const err = $("wizard-exit-error");
+      setStatus(err, "Saving...", null);
+      const saveBtn = $("wizard-exit-save");
+      const noSaveBtn = $("wizard-exit-nosave");
+      const cancelBtn = $("wizard-exit-cancel");
+      if (saveBtn) saveBtn.disabled = true;
+      if (noSaveBtn) noSaveBtn.disabled = true;
+      if (cancelBtn) cancelBtn.disabled = true;
+      try {
+        const r = await wizardSaveDraftToDisk();
+        if (!r.ok) {
+          setStatus(err, r.error || "Save failed.", "bad");
+          return;
+        }
+        showWizardExitOverlay(false);
+        await closeWizard();
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+        if (noSaveBtn) noSaveBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+    });
+  }
+
+  const wizardExitNoSave = $("wizard-exit-nosave");
+  if (wizardExitNoSave) wizardExitNoSave.addEventListener("click", async () => { showWizardExitOverlay(false); await closeWizard(); });
+
+  const wizardExitCancel = $("wizard-exit-cancel");
+  if (wizardExitCancel) wizardExitCancel.addEventListener("click", () => showWizardExitOverlay(false));
 }
 
 async function init() {
@@ -1319,18 +2629,26 @@ async function init() {
   await refreshLatestSync();
   await refreshLogs();
 
+  let forcedTab = "";
   try {
     const url = new URL(window.location.href);
-    const forced = (url.searchParams.get("tab") || "").trim();
-    if (forced && KNOWN_TABS.includes(forced)) return window.__tokeiSelectTab(forced);
+    forcedTab = (url.searchParams.get("tab") || "").trim();
   } catch {
     // ignore
   }
 
   const setupComplete = localStorage.getItem("tokei_setup_complete") === "1";
+  const configMissing = await refreshWizardConfigMissing();
+  if (configMissing) {
+    window.__tokeiSelectTab("setup");
+    await openWizard({ forced: true });
+    return;
+  }
+
   const lastTab = (localStorage.getItem("tokei_last_tab") || "").trim();
   if (lastTab && KNOWN_TABS.includes(lastTab)) return window.__tokeiSelectTab(lastTab);
   if (setupComplete) return window.__tokeiSelectTab("run");
+  if (forcedTab && KNOWN_TABS.includes(forcedTab)) return window.__tokeiSelectTab(forcedTab);
 }
 
 init();

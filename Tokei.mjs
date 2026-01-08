@@ -10,7 +10,8 @@ import os from "os";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_ROOT) : __dirname;
-const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : appRoot;
+const defaultUserRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "Tokei") : appRoot;
+const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : defaultUserRoot;
 const DEFAULT_THEME = "dark-graphite";
 const APP_VERSION = "0.7.2 (alpha)";
 

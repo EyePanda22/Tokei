@@ -165,11 +165,50 @@ def _upsert_lexeme(
         INSERT INTO lexemes(content_key, surface, normalized_surface, rule_id, first_seen, last_seen)
         VALUES(?, ?, ?, ?, ?, ?)
         ON CONFLICT(content_key) DO UPDATE SET
+          surface = excluded.surface,
+          normalized_surface = excluded.normalized_surface,
           first_seen = CASE WHEN lexemes.first_seen < excluded.first_seen THEN lexemes.first_seen ELSE excluded.first_seen END,
           last_seen = CASE WHEN lexemes.last_seen > excluded.last_seen THEN lexemes.last_seen ELSE excluded.last_seen END
         """,
         (content_key, surface, normalized_surface, rule_id, first_seen, last_seen),
     )
+
+
+_BOLD_TAG_RE = re.compile(r"<b[^>]*>(.*?)</b>", flags=re.IGNORECASE | re.DOTALL)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _extract_bolded_term(surface: str) -> str | None:
+    s = str(surface or "")
+    if "<b" not in s.lower():
+        return None
+
+    matches = _BOLD_TAG_RE.findall(s)
+    if not matches:
+        return None
+
+    candidates: list[str] = []
+    for raw in matches:
+        t = _HTML_TAG_RE.sub("", str(raw or ""))
+        t = _normalize_surface_for_identity(t)
+        if t:
+            candidates.append(t)
+
+    if not candidates:
+        return None
+
+    if len(candidates) == 1:
+        return candidates[0]
+
+    jp = [t for t in candidates if re.search(r"[\u3040-\u30ff\u3400-\u9fff]", t)]
+    if len(jp) == 1:
+        return jp[0]
+    if jp:
+        jp.sort(key=len)
+        return jp[0]
+
+    candidates.sort(key=len)
+    return candidates[0]
 
 
 def _resolve_hashi_known_words_db(cfg: Config) -> Path | None:
@@ -217,11 +256,21 @@ def _phase2_import_hashi_lexemes(
             "SELECT content_key, surface, normalized_surface, rule_id, first_seen, last_seen FROM lexemes"
         ).fetchall()
         for content_key, surface, normalized_surface, rule_id, first_seen, last_seen in rows:
+            extracted = _extract_bolded_term(surface) or _extract_bolded_term(normalized_surface)
+            if extracted:
+                surface = extracted
+                normalized_surface = extracted
+
+            surface_s = _normalize_surface_for_identity(str(surface))
+            normalized_s = _normalize_surface_for_identity(str(normalized_surface or surface_s))
+            if not normalized_s:
+                continue
+
             _upsert_lexeme(
                 con,
                 content_key=str(content_key),
-                surface=str(surface),
-                normalized_surface=str(normalized_surface),
+                surface=surface_s,
+                normalized_surface=normalized_s,
                 rule_id=str(rule_id),
                 first_seen=str(first_seen or today.isoformat()),
                 last_seen=str(last_seen or today.isoformat()),
@@ -1505,7 +1554,17 @@ def main(argv: list[str]) -> int:
         raise ConfigError("--sync-only and --no-sync are mutually exclusive.")
 
     env_root = os.environ.get("TOKEI_USER_ROOT")
-    root = Path(env_root).resolve() if env_root else Path(__file__).resolve().parents[1]
+    if env_root:
+        root = Path(env_root).resolve()
+    else:
+        appdata = os.environ.get("APPDATA") or ""
+        appdata_root = (Path(appdata) / "Tokei") if appdata else None
+        # Only default to %APPDATA%\Tokei when it's already been set up (config exists),
+        # so running from source remains portable by default.
+        if appdata_root and (appdata_root / "config.json").exists():
+            root = appdata_root
+        else:
+            root = Path(__file__).resolve().parents[1]
     config_path = root / "config.json"
     cache_dir = root / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1773,6 +1832,39 @@ def main(argv: list[str]) -> int:
         prev_anki_total = int(prev[6]) if prev else anki_total
         prev_retention_rate = (float(prev[7]) * 100.0) if prev else (anki_true_retention * 100.0)
         prev_tokei_surface_words = int(prev[8]) if prev else tokei_surface_words
+
+        # For Sync (sync-only), prefer comparing against the previous sync snapshot rather than the
+        # previous report snapshot. Otherwise, if you haven't generated a report in a while, the
+        # dashboard Sync deltas can look unexpectedly large.
+        if args.sync_only:
+            prev_sync = read_latest_sync_snapshot()
+            if isinstance(prev_sync, dict):
+                prev_summary = prev_sync.get("summary")
+                if isinstance(prev_summary, dict):
+                    try:
+                        prev_hours = float(prev_summary.get("immersion_total_hours") or 0.0)
+                        prev_lifetime = int(round(prev_hours * 3600.0))
+                    except Exception:
+                        pass
+
+                    def _prev_int(key: str, fallback: int) -> int:
+                        try:
+                            return int(prev_summary.get(key) or 0)
+                        except Exception:
+                            return fallback
+
+                    prev_tokei_surface_words = _prev_int("tokei_surface_words", prev_tokei_surface_words)
+                    prev_known_lemmas = _prev_int("known_lemmas", prev_known_lemmas)
+                    prev_known_inflections = _prev_int("known_inflections", prev_known_inflections)
+                    prev_manga_chars = _prev_int("manga_chars_total", prev_manga_chars)
+                    prev_ttsu_chars = _prev_int("ttsu_chars_total", prev_ttsu_chars)
+                    prev_gsm_chars = _prev_int("gsm_chars_total", prev_gsm_chars)
+                    prev_anki_total = _prev_int("anki_total_reviews", prev_anki_total)
+
+                    try:
+                        prev_retention_rate = float(prev_summary.get("anki_true_retention_rate") or prev_retention_rate)
+                    except Exception:
+                        pass
 
         retention_rate = anki_true_retention * 100.0
         retention_delta = round(retention_rate - prev_retention_rate, 2)

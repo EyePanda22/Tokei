@@ -26,6 +26,15 @@
       <section id="panel-setup" class="panel active">
         <div class="grid">
           <div class="card">
+            <h2>Setup wizard</h2>
+            <div class="hint">Guided setup for first-time users. You can run it again any time.</div>
+            <div class="row">
+              <button id="wizard-open" class="btn primary" type="button">Open setup wizard</button>
+              <div id="wizard-status" class="status"></div>
+            </div>
+          </div>
+
+          <div class="card">
             <h2>Environment</h2>
             <div class="kv">
               <div class="k">App root</div>
@@ -40,14 +49,49 @@
           </div>
 
           <div class="card">
+            <h2>Report settings</h2>
+            <div class="subhead">Output folder</div>
+            <div class="row">
+              <input id="report-output-dir" class="input" type="text" placeholder="Leave blank to use the default folder" />
+              <button id="report-output-browse" class="btn" type="button">Browse…</button>
+              <button id="report-output-open" class="btn" type="button">Open</button>
+            </div>
+            <div class="hint">
+              Default is your Pictures folder: <code>Pictures\\Tokei</code>. HTML reports are saved in an <code>HTML</code> subfolder.
+            </div>
+
+            <div class="row">
+              <div style="flex: 1; min-width: 220px">
+                <div class="subhead">Timezone</div>
+                <input id="report-timezone" class="input" type="text" placeholder="local (recommended)" />
+              </div>
+              <div style="flex: 1; min-width: 220px">
+                <div class="subhead">Theme</div>
+                <select id="report-theme" class="input"></select>
+              </div>
+              <div style="display: flex; align-items: flex-end; gap: 10px">
+                <button id="report-theme-samples" class="btn" type="button">Open theme samples</button>
+              </div>
+            </div>
+            <div class="hint">
+              Timezone: leave as <code>local</code> unless you know you need a specific IANA name (for example <code>America/New_York</code>).
+            </div>
+
+            <div class="row">
+              <button id="report-save-config" class="btn primary" type="button">Save config.json</button>
+              <div id="report-save-status" class="status"></div>
+            </div>
+          </div>
+
+          <div class="card">
             <h2>Toggl token</h2>
             <div class="row">
-              <input id="toggl-token" class="input" type="password" placeholder="Paste token (optional)" />
+              <input id="toggl-token" class="input" type="password" placeholder="Paste token" />
               <button id="toggl-reveal" class="btn">Show</button>
               <button id="toggl-save" class="btn">Save</button>
               <button id="toggl-advanced-toggle" class="btn">Advanced</button>
             </div>
-            <div class="hint">Stored in <code>toggl-token.txt</code>. Leave empty to clear.</div>
+            <div class="hint">Required for Toggl hours. Stored in <code>toggl-token.txt</code>. Leave empty to clear.</div>
 
             <div id="toggl-advanced" class="advanced" hidden>
               <button id="toggl-advanced-close" class="panel-close" type="button" title="Hide">-</button>
@@ -118,7 +162,14 @@
                 <input id="anki-enabled" type="checkbox" />
                 Enable built-in Anki snapshot exporter
               </label>
+              <label class="check">
+                <input id="anki-nonblocking" type="checkbox" />
+                Don’t block reports if Anki isn’t set up
+              </label>
               <button id="anki-advanced-toggle" class="btn">Advanced</button>
+            </div>
+            <div class="hint">
+              If you don’t use Anki, enable “Don’t block” so reports still run (Anki stats will show as 0).
             </div>
             <div id="anki-advanced" class="advanced" hidden>
               <button id="anki-advanced-close" class="panel-close" type="button" title="Hide">×</button>
@@ -470,6 +521,39 @@
         <div id="getting-started-grid" class="grid"></div>
       </section>
     </main>
+
+    <div id="wizard-overlay" class="wizard-overlay" hidden aria-hidden="true">
+      <div class="wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+        <div class="wizard-head">
+          <div id="wizard-title" class="wizard-title">Setup wizard</div>
+          <button id="wizard-close" class="btn" type="button">Close</button>
+        </div>
+        <div id="wizard-steps" class="wizard-steps"></div>
+        <div id="wizard-body" class="wizard-body"></div>
+        <div class="wizard-foot">
+          <div id="wizard-error" class="status bad"></div>
+          <div class="wizard-actions">
+            <button id="wizard-back" class="btn" type="button">Back</button>
+            <button id="wizard-next" class="btn primary" type="button">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="wizard-exit-overlay" class="wizard-exit-overlay" hidden aria-hidden="true">
+      <div class="wizard-exit" role="dialog" aria-modal="true" aria-labelledby="wizard-exit-title">
+        <div class="wizard-exit-title" id="wizard-exit-title">Exit setup wizard?</div>
+        <div class="wizard-exit-body">
+          You haven’t finished setup yet. If you exit now, Tokei may not be able to sync or generate reports until setup is completed.
+        </div>
+        <div id="wizard-exit-error" class="status bad"></div>
+        <div class="wizard-exit-actions">
+          <button id="wizard-exit-save" class="btn primary" type="button">Save and exit</button>
+          <button id="wizard-exit-nosave" class="btn" type="button">Exit without saving</button>
+          <button id="wizard-exit-cancel" class="btn" type="button">Continue setup</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="app.js"></script>
   </body>
