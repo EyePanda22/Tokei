@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
+## 0.7.0 - 2026-01-08
+
+### Added
+- Electron installer: bundled embedded Python runtime so users do not need to install Python separately.
+- Build tooling: `tools/prep_embedded_python.mjs` (and `npm run prep:python`) to download/extract embedded Python and minimal runtime wheels.
+
+### Changed
+- Electron runtime now auto-detects the bundled `python\\python.exe` when packaged (via `TOKEI_PYTHON_EXE`).
+- README: updated setup/build instructions to reflect bundled Python for Electron builds.
+
 ## 0.6.1 - 2026-01-07
 
 ### Added

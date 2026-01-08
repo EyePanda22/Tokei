@@ -66,7 +66,7 @@ Optional (advanced): install the Hashi Anki add-on instead of using built-in sna
 - In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
 - Link: https://ankiweb.net/shared/info/1132527238
 
-Tokei will generate HTML reports by default. PNG reports require additional setup (see below).
+The Electron build generates HTML + PNG reports out of the box. If you are running from source / a portable folder, see the PNG setup notes below.
 
 ### PNG output (required for PNG reports)
 
@@ -199,6 +199,11 @@ Requirements:
 
 Build:
 - `npm run dist:win`
+
+Optional build settings:
+- `TOKEI_PYTHON_EMBED_VERSION` (default `3.12.7`)
+- `TOKEI_PYTHON_EMBED_ARCH` (default `amd64`)
+- `TOKEI_PYTHON_EMBED_FORCE=1` to re-download/rebuild the embedded Python folder
 
 Output:
 - `dist-installer-electron\\`
