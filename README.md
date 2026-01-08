@@ -175,26 +175,6 @@ Advanced CLI flags:
 - `--no-sync`: generate a report using `cache/latest_sync.json` without refreshing sources (run Sync first)
 
 
-## Build Tokei.exe (app-only)
-
-Tokei.exe bundles Python + the Tokei code, but still requires external Node.js and Puppeteer.
-It behaves like running Tokei.bat and does not install dependencies.
-
-Build steps (one-folder):
-
-1) Install PyInstaller into the local venv:
-   - `.venv\Scripts\python.exe -m pip install pyinstaller`
-2) Build:
-   - `.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm tokei.spec`
-3) Output:
-   - `dist\Tokei\Tokei.exe`
-
-Run requirements for the built exe:
-
-- Node.js 18+ is on PATH
-- `node_modules\puppeteer` exists in the same folder as Tokei.exe (run Setup-Environment.bat there)
-- `config.json` exists (run Setup-Tokei.bat there)
-
 ## Build Windows installer (Electron UI, Windows-only)
 
 This produces a per-user Windows installer for the desktop UI (Electron).
@@ -223,3 +203,28 @@ Output:
 - Rerun Setup-Tokei.bat any time you want to update settings.
 - run.bat is safe to run daily (it will detect same-day reports and offer: new report / overwrite today / cancel).
 - Reset-Tokei.bat is destructive; use it only when you want to wipe cache/output.
+
+## Developer-only builds (source/portable)
+
+These are not part of the released Windows installer and are intended for development, debugging, or portable/source workflows.
+
+### Build `Tokei.exe` (developer-only)
+
+This is a **portable CLI-style runner**, mainly useful if you want a single executable wrapper for the pipeline without shipping the full Electron desktop app.
+
+It bundles Python + the Tokei Python code, but still requires external Node.js and Puppeteer (similar to running from source).
+
+Build steps (one-folder):
+
+1) Install PyInstaller into the local venv:
+   - `.venv\\Scripts\\python.exe -m pip install pyinstaller`
+2) Build:
+   - `.venv\\Scripts\\python.exe -m PyInstaller --clean --noconfirm tokei.spec`
+3) Output:
+   - `dist\\Tokei\\Tokei.exe`
+
+Run requirements for the built exe:
+
+- Node.js 18+ is on PATH
+- `node_modules\\puppeteer` exists in the same folder as `Tokei.exe` (run `Setup-Environment.bat` there)
+- `config.json` exists (run `Setup-Tokei.bat` there)
