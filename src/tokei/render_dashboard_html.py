@@ -26,7 +26,11 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from tokei_errors import CONFIG, OUTPUT
+try:
+    from tokei_errors import CONFIG, OUTPUT
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from tokei_errors import CONFIG, OUTPUT
 
 def format_hms(total_seconds: int) -> str:
     sign = "-" if total_seconds < 0 else ""
