@@ -9,6 +9,7 @@
 /dist-installer/
 /dist-installer-electron/
 /puppeteer-cache/
+/python/
 /CHATGPT_CONTEXT.md
 **/__pycache__/
 *.py[cod]

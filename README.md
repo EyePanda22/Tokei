@@ -42,7 +42,7 @@ The UI also maintains:
 ### Quick start (most users)
 
 1) Install Tokei (Electron UI build) and run it from the Start Menu shortcut
-2) Install Python and ensure `python --version` works (Tokei's pipeline calls Python)
+2) No extra installs needed for the Electron build (it bundles Python + Puppeteer for the report pipeline)
 3) Optional (recommended for Mokuro/Ttsu): install Google Drive for Desktop so your reading data stays in sync
    - After it's installed, open your Drive on your PC (often `G:\`) and locate:
      - `ttu-reader-data` (Ttsu Reader)
@@ -74,7 +74,7 @@ PNG reports are rendered using Puppeteer via Node.js.
 
 Electron UI builds bundle Puppeteer (and the required browser) so PNG rendering works without extra installs.
 
-If you are running from source / a portable folder, install Node.js 18+ and run `npm install` in the Tokei folder so `node_modules\puppeteer` exists.
+If you are running from source / a portable folder, install Python (or set `TOKEI_PYTHON_EXE`), install Node.js 18+, and run `npm install` in the Tokei folder so `node_modules\puppeteer` exists.
 
 If Puppeteer is not installed, Tokei will still generate HTML reports, but PNG output will fail with a warning.
 
@@ -194,7 +194,7 @@ This produces a per-user Windows installer for the desktop UI (Electron).
 Requirements:
 - Node.js 18+
 - `npm install`
-- Python available on PATH (Tokei's pipeline calls Python)
+- Network access during build (downloads embedded Python)
 - Build machine must be allowed to create symlinks (Windows Developer Mode enabled, or run the build in an elevated terminal); otherwise `electron-builder` may fail extracting `winCodeSign`.
 
 Build:

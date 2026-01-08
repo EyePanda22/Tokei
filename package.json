@@ -11,9 +11,10 @@
     "bump:minor": "node tools/bump_version.mjs minor",
     "bump:major": "node tools/bump_version.mjs major",
     "prep:puppeteer": "node tools/prep_puppeteer_cache.mjs",
+    "prep:python": "node tools/prep_embedded_python.mjs",
     "ui:web": "node ui/tokei_ui.mjs",
     "ui:electron": "node electron/launch.mjs",
-    "dist:win": "node tools/prep_puppeteer_cache.mjs && electron-builder --win nsis --x64"
+    "dist:win": "node tools/prep_embedded_python.mjs && node tools/prep_puppeteer_cache.mjs && electron-builder --win nsis --x64"
   },
   "dependencies": {
     "puppeteer": "^24.34.0"
@@ -35,6 +36,7 @@
       "src/**",
       "design/**",
       "assets/**",
+      "python/**",
       "extras/gsm-plugin/**",
       "puppeteer-cache/**",
       "package.json",

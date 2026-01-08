@@ -21,6 +21,19 @@ process.env.TOKEI_APP_ROOT = process.env.TOKEI_APP_ROOT || (app.isPackaged ? app
 const configPath = path.join(tokeiUserRoot, "config.json");
 
 try {
+  if (app.isPackaged && !(process.env.TOKEI_PYTHON_EXE && String(process.env.TOKEI_PYTHON_EXE).trim())) {
+    const pyDir = path.join(process.env.TOKEI_APP_ROOT, "python");
+    const pyExe = path.join(pyDir, "python.exe");
+    if (fs.existsSync(pyExe)) {
+      process.env.TOKEI_PYTHON_EXE = pyExe;
+      if (!process.env.PYTHONHOME) process.env.PYTHONHOME = pyDir;
+    }
+  }
+} catch {
+  // ignore
+}
+
+try {
   const cacheDir = path.join(process.env.TOKEI_APP_ROOT, "puppeteer-cache");
   if (!process.env.PUPPETEER_CACHE_DIR && fs.existsSync(cacheDir)) process.env.PUPPETEER_CACHE_DIR = cacheDir;
 } catch {
