@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
+## 0.7.1 - 2026-01-08
+
+### Added
+- Setup UI: Anki profile field plus profile auto-detect dropdown (scans local Anki2 profiles).
+
+### Changed
+- README: documented `config.json -> anki_profile`.
+
+### Fixed
+- Embedded Python: Python scripts now reliably import local modules when running under the bundled Python runtime (fixes `ModuleNotFoundError: tokei_errors` and related issues).
+- UI: Anki “Discover decks/fields” now uses the currently selected Anki profile.
+
 ## 0.7.0 - 2026-01-08
 
 ### Added
