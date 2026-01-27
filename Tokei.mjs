@@ -13,7 +13,7 @@ const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_
 const defaultUserRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "Tokei") : appRoot;
 const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : defaultUserRoot;
 const DEFAULT_THEME = "dark-graphite";
-const APP_VERSION = "0.8.0 (alpha)";
+const APP_VERSION = "0.8.1 (alpha)";
 
 function initRuntimeLogPath() {
   try {

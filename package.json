@@ -1,6 +1,6 @@
 {
   "name": "tokei",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Tokei: Dashboard Sync",
   "author": "EyePanda",
   "private": true,
@@ -36,6 +36,7 @@
       "src/**",
       "design/**",
       "assets/**",
+      "samples",
       "python/**",
       "extras/gsm-plugin/**",
       "puppeteer-cache/**",
