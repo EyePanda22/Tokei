@@ -103,13 +103,7 @@ begin
         '  "theme": "dark-graphite",' + #13#10 +
         '  "output_dir": "' + ReportsDirEsc + '",' + #13#10 +
         '  "one_page": true,' + #13#10 +
-        '  "hashi": {' + #13#10 +
-        '    "host": "127.0.0.1",' + #13#10 +
-        '    "port": 8766,' + #13#10 +
-        '    "token": null,' + #13#10 +
-        '    "refresh_timeout_ms": 10000,' + #13#10 +
-        '    "require_fresh": true' + #13#10 +
-        '  },' + #13#10 +
+        '  "anki_stats": { "require_fresh": true },' + #13#10 +
         '  "toggl": {' + #13#10 +
         '    "start_date": "auto",' + #13#10 +
         '    "refresh_days_back": 60,' + #13#10 +

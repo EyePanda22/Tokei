@@ -175,7 +175,7 @@
               <button id="anki-advanced-close" class="panel-close" type="button" title="Hide">×</button>
               <div class="row">
                 <div class="hint">
-                  Output dir controls where Hashi-compatible exports are written. Leave as <code>hashi_exports</code> unless you know you need to change it.
+                  Output dir controls where Anki snapshot files are written. Default is <code>hashi_exports</code> (legacy name). Leave it unless you know you need to change it.
                 </div>
               </div>
               <div class="row">
@@ -408,11 +408,15 @@
             <div id="sync-status" class="status"></div>
             <div id="report-status" class="status"></div>
           </div>
+          <div id="run-message" class="hint prewrap"></div>
           <div class="row">
             <button id="open-output" class="btn">Open output folder</button>
             <button id="open-html" class="btn">Open latest HTML</button>
           </div>
-          <pre id="run-output" class="mono"></pre>
+          <details id="run-details" class="details">
+            <summary id="run-details-summary">Technical details</summary>
+            <pre id="run-output" class="mono"></pre>
+          </details>
         </div>
 
         <div class="card">
@@ -510,7 +514,7 @@
                 - If you installed both the CLI and Electron builds, both typically share <code>%APPDATA%\\Tokei</code> via <code>TOKEI_USER_ROOT</code>.
               </div>
               <div class="hint">
-                - Optional Anki producer: you can install the Hashi Anki add-on instead, and then disable the built-in snapshot exporter.
+                - Legacy option: you can use the Hashi Anki add-on as the snapshot producer instead (not recommended).
               </div>
             </details>
           </div>

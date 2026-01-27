@@ -524,10 +524,34 @@ async function handleApi(req, res) {
       const snap = cfg?.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
       const enabled = snap?.enabled === true;
       const rules = Array.isArray(snap?.rules) ? snap.rules : [];
+      if (!enabled) {
+        return json(res, 200, {
+          ok: false,
+          error: "anki_snapshot_export_disabled",
+          error_code: "TKE-ANKI-EXPORT-DISABLED",
+          title: "Anki snapshot export is turned off",
+          message:
+            "Tokei can’t export Anki stats because the built-in snapshot exporter is disabled. Enable it in Setup, save config.json, then try again.",
+          steps: [
+            "Open the Setup tab",
+            'Enable “built-in Anki snapshot exporter”',
+            "Click “Save config.json”",
+            "Try Test export again",
+          ],
+        });
+      }
       if (enabled && rules.length === 0) {
         return json(res, 200, {
           ok: false,
           error: "anki_snapshot_rules_missing",
+          error_code: "TKE-ANKI-RULES-MISSING",
+          title: "Anki snapshot rules are missing",
+          steps: [
+            "Open the Setup tab",
+            "Add at least one Anki snapshot rule (deck + target field)",
+            "Click “Save config.json”",
+            "Try Test export again",
+          ],
           message:
             'Anki snapshot exporter is enabled, but no rules are configured. Add at least one rule in Setup → "Anki snapshot rules", then click "Save config.json".',
         });

@@ -137,7 +137,9 @@ async function refreshHashiExport(cfg) {
   const port = Number.isFinite(Number(hashiCfg.port)) ? Number(hashiCfg.port) : 8766;
   const token = typeof hashiCfg.token === "string" && hashiCfg.token.trim() ? hashiCfg.token.trim() : null;
   const timeoutMs = Number.isFinite(Number(hashiCfg.refresh_timeout_ms)) ? Number(hashiCfg.refresh_timeout_ms) : 10000;
-  const requireFresh = hashiCfg.require_fresh === false ? false : true;
+  const ankiStatsCfg = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
+  const requireFresh =
+    typeof ankiStatsCfg.require_fresh === "boolean" ? ankiStatsCfg.require_fresh : hashiCfg.require_fresh === false ? false : true;
 
   function portUrl(p) {
     return `http://${host}:${p}`;
@@ -672,13 +674,7 @@ async function ensureConfigOrSetup() {
     theme: DEFAULT_THEME,
     output_dir: getDefaultOutputDir(),
     one_page: true,
-    hashi: {
-      host: "127.0.0.1",
-      port: 8766,
-      token: null,
-      refresh_timeout_ms: 10000,
-      require_fresh: true,
-    },
+    anki_stats: { require_fresh: true },
     toggl: {
       start_date: "auto",
       refresh_days_back: 60,

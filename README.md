@@ -15,7 +15,7 @@ Note: Tokei runs as a console app (CLI), and also includes a setup-first UI (web
 Tokei is a standalone sync + report generator that combines:
 
 - Toggl (API token) for lifetime + today immersion (with description breakdown)
-- Anki stats (either built-in snapshot exporter or the Hashi add-on) for retention + review totals
+- Anki stats (built-in snapshot exporter; legacy Hashi add-on optional) for retention + review totals
 - Mokuro (volume-data.json) for manga characters read
 - Ttsu Reader (ttu-reader-data/statistics_*.json) for novel characters read
 - GameSentenceMiner (gsm.db) for GSM characters read
@@ -68,7 +68,7 @@ Tip: use File > Open Logs to open the log folder if anything fails.
 Optional: run `Tokei-UI.bat` any time to edit config, validate Anki export, test PNG rendering, and run reports (web UI)
 - Dev/electron: `npm run ui:electron`
 
-Optional (advanced): install the Hashi Anki add-on instead of using built-in snapshots:
+Legacy (deprecated): Hashi Anki add-on (not recommended for new users):
 - In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
 - Link: https://ankiweb.net/shared/info/1132527238
 
@@ -127,8 +127,10 @@ These scripts are intended for running from source / a portable folder. If you i
 - Field types are implied by the example values; keep the same types when editing `config.json`.
 - Anki profile:
   - `anki_profile`: the name of your local Anki profile folder (defaults to `User 1`).
+- Anki stats behavior:
+  - `anki_stats.require_fresh`: if false, Tokei will not fail the report when Anki stats cannot be refreshed (it will fall back to the most recent snapshot file if available).
 - Anki snapshot:
-  - `anki_snapshot.enabled`: if true, Tokei uses the built-in Anki snapshot exporter instead of Hashi HTTP exports.
+  - `anki_snapshot.enabled`: if true, Tokei uses the built-in Anki snapshot exporter (recommended).
   - `anki_snapshot.rules`: list of deck/field rules (supports multiple decks and note types per rule); see `config.example.json`.
 - Phase 2:
   - Optional CSV ingest: any `*.csv` in `data/` (first column only; one or more header rows allowed). If no CSVs exist in `data/`, it falls back to `data/csv/known.csv` and `known.csv` for compatibility.
@@ -143,9 +145,9 @@ Troubleshooting:
 
 Tokei reads from these external tools but does not modify them:
 
-- Anki (two supported snapshot producers)
-  - Built-in snapshot exporter (recommended): reads your Anki profile `collection.anki2` and writes Hashi-compatible exports under `hashi_exports/` (configurable)
-  - Hashi (Anki add-on, optional): writes the same exports under `hashi_exports/` (configurable)
+- Anki (snapshot producer)
+  - Built-in snapshot exporter (recommended): reads your Anki profile `collection.anki2` and writes snapshot files under `hashi_exports/` (configurable)
+  - Hashi (Anki add-on, legacy/deprecated): writes the same snapshot files under `hashi_exports/` (configurable)
 - GSM (Game Sentence Miner)
   - Reads gsm.db (auto path uses %APPDATA%\GameSentenceMiner\gsm.db)
   - If missing, Tokei warns and continues
@@ -166,7 +168,7 @@ Optional source toggles (to hide Reading sections):
 - Theme previews are available as PNGs in samples/.
 - For fresh Anki stats:
   - If `anki_snapshot.enabled=true`, Tokei exports from `collection.anki2` before reading the file.
-  - Otherwise, Tokei triggers a Hashi export via http://127.0.0.1:8766/export before reading the file.
+  - Otherwise, Tokei will try the legacy Hashi export (if installed) before reading the file.
 - Toggl history note: due to Toggl API limitations, Tokei effectively only pulls a recent window (by default the last 60 days via `toggl.refresh_days_back`).
   - If you've used Toggl for longer than that, set `toggl.baseline_hours` to your lifetime total through yesterday (do NOT include today).
   - Once set, you typically should not keep updating this value; only change it if you corrected your Toggl history/project selection or originally entered the wrong baseline.

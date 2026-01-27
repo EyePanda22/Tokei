@@ -4,12 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
+## 0.8.1 - 2026-01-27
+
+### Added
+- Electron UI: user-friendly error summaries on the Dashboard Run panel with collapsible "Technical details" (tracebacks are no longer shown by default).
+- Electron UI: structured error messages for common Anki snapshot setup issues (disabled exporter / missing rules) to improve troubleshooting.
+
+### Changed
+- Config: introduced `anki_stats.require_fresh` (replaces the Hashi-namespaced `hashi.require_fresh`) for the "Don't block reports if Anki isn't set up" behavior (legacy `hashi.require_fresh` is still read for compatibility).
+- UI/Docs: clarified that `hashi_exports` is a legacy folder name used for Anki snapshot outputs; reduced Hashi add-on emphasis for new users.
+
+### Fixed
+- Avoid noisy Python tracebacks for common configuration errors by returning actionable guidance to the UI.
+
 ## 0.8.0 - 2026-01-08
 
 ### Added
 - Electron UI: first-run Setup Wizard overlay (auto-opens when `config.json` is missing) plus a Setup tab button to rerun the wizard at any time.
 - Electron UI: Report settings panel in Setup (output folder, timezone, theme picker, open theme samples).
-- Electron UI: Anki “Don’t block reports if Anki isn’t set up” toggle (sets `hashi.require_fresh=false`).
+- Electron UI: Anki "Don't block reports if Anki isn't set up" toggle (sets `anki_stats.require_fresh=false`).
 - Wizard: exit confirmation dialog (Save and exit / Exit without saving / Continue setup) with draft saving so users can resume later.
 - Wizard: Anki rule editor now matches the Setup tab flow (multiple rules, selectable rule row, and discover chips for decks/note types/fields).
 

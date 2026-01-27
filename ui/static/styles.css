@@ -92,6 +92,7 @@ select.input { max-width: 280px; }
 .btn:disabled { opacity: 0.6; cursor: default; }
 
 .hint { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.prewrap { white-space: pre-wrap; }
 .status { margin-left: 6px; color: var(--muted); font-size: 12px; }
 .status.good { color: var(--good); }
 .status.bad { color: var(--bad); }

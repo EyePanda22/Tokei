@@ -13,13 +13,7 @@ def _default_config() -> dict:
         "theme": "dark-graphite",
         "output_dir": "output",
         "one_page": True,
-        "hashi": {
-            "host": "127.0.0.1",
-            "port": 8766,
-            "token": None,
-            "refresh_timeout_ms": 10000,
-            "require_fresh": True,
-        },
+        "anki_stats": {"require_fresh": True},
         "toggl": {
             "start_date": "auto",
             "refresh_days_back": 60,

@@ -21,6 +21,127 @@ function setStatus(el, msg, kind) {
   if (kind) el.classList.add(kind);
 }
 
+function setText(el, msg) {
+  if (!el) return;
+  el.textContent = msg || "";
+}
+
+function normalizeText(s) {
+  return String(s || "").replace(/\r\n/g, "\n").trim();
+}
+
+function extractPythonTerminalErrorLine(text) {
+  const t = normalizeText(text);
+  if (!t) return "";
+  const lines = t.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = String(lines[i] || "").trim();
+    if (/^[A-Za-z_][A-Za-z0-9_]*Error:\s+/.test(line)) return line;
+  }
+  return "";
+}
+
+function toFriendlyErrorFromText(text) {
+  const t = normalizeText(text);
+  if (!t) return null;
+
+  // Common Python traceback terminal line.
+  const terminal = extractPythonTerminalErrorLine(t);
+  const needle = terminal || t;
+
+  if (needle.includes("anki_snapshot.enabled is false")) {
+    return {
+      error_code: "TKE-ANKI-EXPORT-DISABLED",
+      title: "Anki snapshot export is turned off",
+      message: "Tokei can’t export Anki stats until the built-in snapshot exporter is enabled.",
+      steps: [
+        "Open the Setup tab",
+        'Enable “built-in Anki snapshot exporter”',
+        "Click “Save config.json”",
+        "Try again",
+      ],
+    };
+  }
+
+  if (needle.includes("anki_snapshot.rules is required") || needle.includes("anki_snapshot_rules_missing")) {
+    return {
+      error_code: "TKE-ANKI-RULES-MISSING",
+      title: "Anki snapshot rules are missing",
+      message: "The Anki snapshot exporter is enabled, but no rules are configured.",
+      steps: [
+        "Open the Setup tab",
+        "Add at least one Anki snapshot rule (deck + target field)",
+        "Click “Save config.json”",
+        "Try again",
+      ],
+    };
+  }
+
+  if (needle.includes("Anki collection DB not found:")) {
+    return {
+      error_code: "TKE-ANKI-COLLECTION-NOT-FOUND",
+      title: "Anki profile not found",
+      message: "Tokei couldn’t find your Anki collection database for the selected profile.",
+      steps: [
+        "Make sure Anki is installed on this PC",
+        "Open Anki once and confirm the profile exists",
+        "In Setup, select the correct Anki profile",
+        "Try again",
+      ],
+    };
+  }
+
+  if (needle.includes("APPDATA is not set")) {
+    return {
+      error_code: "TKE-ENV-APPDATA-MISSING",
+      title: "Windows environment issue",
+      message: "Tokei couldn’t locate required Windows paths (APPDATA).",
+      steps: ["Restart your PC and try again", "If it still fails, open Logs and send runtime.log to support"],
+    };
+  }
+
+  if (
+    needle.includes("python was not found") ||
+    needle.includes("Python was not found") ||
+    (needle.includes("ENOENT") && needle.toLowerCase().includes("python"))
+  ) {
+    return {
+      error_code: "TKE-PYTHON-NOT-FOUND",
+      title: "Python is not available",
+      message: "Anki snapshot/export needs Python, but Tokei couldn’t run it.",
+      steps: ["In Setup, click “Check Python”", "Install Python if needed", "Try again"],
+    };
+  }
+
+  return null;
+}
+
+function toFriendlyErrorFromApiResult(r) {
+  if (!r || typeof r !== "object") return null;
+  if (typeof r.title === "string" && r.title.trim()) {
+    return {
+      error_code: typeof r.error_code === "string" ? r.error_code : null,
+      title: r.title.trim(),
+      message: typeof r.message === "string" ? r.message.trim() : "",
+      steps: Array.isArray(r.steps) ? r.steps.map((s) => String(s)).filter(Boolean) : [],
+    };
+  }
+  const raw = [r.error, r.stderr, r.raw].filter(Boolean).join("\n");
+  return toFriendlyErrorFromText(raw);
+}
+
+function formatFriendlyErrorText(friendly) {
+  if (!friendly) return "";
+  const title = friendly.title ? `${friendly.title}` : "Error";
+  const msg = friendly.message ? `\n${friendly.message}` : "";
+  const steps =
+    Array.isArray(friendly.steps) && friendly.steps.length
+      ? `\n\nFix:\n- ${friendly.steps.join("\n- ")}`
+      : "";
+  const code = friendly.error_code ? `\n\nError code: ${friendly.error_code}` : "";
+  return `${title}${msg}${steps}${code}`.trim();
+}
+
 function parseHmsToHours(value) {
   const parts = String(value || "").trim().split(":");
   if (parts.length !== 3) throw new Error("expected HH:MM:SS");
@@ -211,13 +332,7 @@ function getDefaultConfig() {
     theme: "dark-graphite",
     output_dir: "",
     one_page: true,
-    hashi: {
-      host: "127.0.0.1",
-      port: 8766,
-      token: null,
-      refresh_timeout_ms: 10000,
-      require_fresh: true,
-    },
+    anki_stats: { require_fresh: true },
     toggl: {
       start_date: "auto",
       refresh_days_back: 60,
@@ -353,7 +468,7 @@ function renderGettingStartedCardV2(card) {
       Add your Toggl token (required), configure Anki snapshot rules (optional), then click Save to write <code>config.json</code>.
     </div>
     <div class="hint">
-      Anki stats can come from the built-in snapshot exporter (enable + add rules), or from the Hashi add-on (advanced).
+      Anki stats come from the built-in snapshot exporter (recommended). Legacy Hashi add-on exports are still supported for existing users.
     </div>
 
     <div class="subhead">Step 2: Sources</div>
@@ -769,8 +884,10 @@ async function loadConfig() {
     themeSel.value = themeRaw;
   }
 
+  const ankiStats = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
   const hashi = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
-  const requireFresh = hashi.require_fresh === false ? false : true;
+  const requireFresh =
+    typeof ankiStats.require_fresh === "boolean" ? ankiStats.require_fresh : hashi.require_fresh === false ? false : true;
   if ($("anki-nonblocking")) $("anki-nonblocking").checked = !requireFresh;
 
   const toggl = cfg.toggl && typeof cfg.toggl === "object" ? cfg.toggl : {};
@@ -826,8 +943,10 @@ async function saveConfig(currentCfg) {
   cfg.timezone = ($("report-timezone")?.value || "").trim() || "local";
   cfg.theme = ($("report-theme")?.value || "").trim() || "dark-graphite";
 
-  cfg.hashi = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
-  cfg.hashi.require_fresh = $("anki-nonblocking")?.checked ? false : true;
+  cfg.anki_stats = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
+  cfg.anki_stats.require_fresh = $("anki-nonblocking")?.checked ? false : true;
+  // Back-compat: keep older configs' `hashi.require_fresh` in sync if present.
+  if (cfg.hashi && typeof cfg.hashi === "object") cfg.hashi.require_fresh = cfg.anki_stats.require_fresh;
 
   cfg.toggl = cfg.toggl && typeof cfg.toggl === "object" ? cfg.toggl : {};
   const baselineText = ($("toggl-baseline-hms")?.value || "").trim();
@@ -896,7 +1015,8 @@ async function ankiTestExport() {
     const msg = `Export OK. exported_at=${r.exported_at || "?"}`;
     setStatus($("anki-status"), msg, "good");
   } else {
-    setStatus($("anki-status"), r.message || r.stderr || r.error || "Export failed.", "bad");
+    const friendly = toFriendlyErrorFromApiResult(r);
+    setStatus($("anki-status"), (friendly && friendly.title) || r.message || r.stderr || r.error || "Export failed.", "bad");
   }
 }
 
@@ -1301,10 +1421,20 @@ async function refreshLatestReportStats() {
 
 async function syncNow() {
   setStatus($("sync-status"), "Syncing...", null);
+  setText($("run-message"), "");
   $("run-output").textContent = "";
+  const details = $("run-details");
+  if (details) details.open = false;
+  setText($("run-details-summary"), "Technical details");
   const r = await api("POST", "/api/sync", {});
-  if (r.ok) setStatus($("sync-status"), "OK", "good");
-  else setStatus($("sync-status"), r.stderr || `Failed (code ${r.code})`, "bad");
+  if (r.ok) {
+    setStatus($("sync-status"), "OK", "good");
+  } else {
+    const friendly = toFriendlyErrorFromApiResult(r);
+    setStatus($("sync-status"), (friendly && friendly.title) || r.stderr || `Failed (code ${r.code})`, "bad");
+    setText($("run-message"), formatFriendlyErrorText(friendly) || "Open the Logs tab for troubleshooting details.");
+    if (friendly && friendly.error_code) setText($("run-details-summary"), `Technical details (${friendly.error_code})`);
+  }
   $("run-output").textContent = [r.stdout, r.stderr].filter(Boolean).join("\n\n");
   await refreshLatestSync();
   await refreshLatestReportStats();
@@ -1313,12 +1443,22 @@ async function syncNow() {
 
 async function generateReport() {
   setStatus($("report-status"), "Generating...", null);
+  setText($("run-message"), "");
   $("run-output").textContent = "";
+  const details = $("run-details");
+  if (details) details.open = false;
+  setText($("run-details-summary"), "Technical details");
   const mode = $("report-mode").value;
   const syncBeforeReport = $("sync-before-report").checked;
   const r = await api("POST", "/api/generate-report", { mode, sync_before_report: syncBeforeReport });
-  if (r.ok) setStatus($("report-status"), `OK (Anki exported_at=${r.anki_exported_at || "?"})`, "good");
-  else setStatus($("report-status"), r.stderr || `Failed (code ${r.code})`, "bad");
+  if (r.ok) {
+    setStatus($("report-status"), `OK (Anki exported_at=${r.anki_exported_at || "?"})`, "good");
+  } else {
+    const friendly = toFriendlyErrorFromApiResult(r);
+    setStatus($("report-status"), (friendly && friendly.title) || r.stderr || `Failed (code ${r.code})`, "bad");
+    setText($("run-message"), formatFriendlyErrorText(friendly) || "Open the Logs tab for troubleshooting details.");
+    if (friendly && friendly.error_code) setText($("run-details-summary"), `Technical details (${friendly.error_code})`);
+  }
   $("run-output").textContent = [r.stdout, r.stderr].filter(Boolean).join("\n\n");
   await refreshLatestSync();
   await refreshLatestReportStats();
