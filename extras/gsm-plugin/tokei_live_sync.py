@@ -16,7 +16,17 @@ import sqlite3
 import time
 from datetime import datetime
 
-from GameSentenceMiner.util.configuration import logger
+try:
+    # Newer GSM versions
+    from GameSentenceMiner.util.logging_config import logger  # type: ignore
+except Exception:
+    try:
+        # Older GSM versions
+        from GameSentenceMiner.util.configuration import logger  # type: ignore
+    except Exception:
+        import logging
+
+        logger = logging.getLogger("tokei.gsm_live")  # type: ignore
 
 API_URL = "http://localhost:55000/api/today-stats"
 

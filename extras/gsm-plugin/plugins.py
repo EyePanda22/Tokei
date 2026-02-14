@@ -14,7 +14,17 @@ Setup (recommended):
 This approach avoids overwriting your existing plugins.py.
 """
 
-from GameSentenceMiner.util.configuration import logger
+try:
+    # Newer GSM versions
+    from GameSentenceMiner.util.logging_config import logger  # type: ignore
+except Exception:
+    try:
+        # Older GSM versions
+        from GameSentenceMiner.util.configuration import logger  # type: ignore
+    except Exception:
+        import logging
+
+        logger = logging.getLogger("tokei.gsm_live")  # type: ignore
 
 
 def _tokei_live_sync_run() -> None:
