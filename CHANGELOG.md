@@ -4,9 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
-## 0.8.2 - 2026-02-14
+## 0.8.2 - 2026-02-17
+
+### Changed
+- CLI: stop attempting legacy Hashi HTTP exports; when the built-in snapshot exporter is disabled, Tokei now reads the most recent snapshot file on disk (if present).
 
 ### Fixed
+- CLI: fix Anki snapshot export update detection (mtime check now correctly compares against the pre-export timestamp).
 - GSM live sessions plugin templates: updated `logger` import to support newer GSM versions (fallback kept for older installs) to prevent `ModuleNotFoundError: GameSentenceMiner.util.configuration` from breaking user plugins.
 
 ## 0.8.1 - 2026-01-27

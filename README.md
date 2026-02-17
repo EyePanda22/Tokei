@@ -168,7 +168,7 @@ Optional source toggles (to hide Reading sections):
 - Theme previews are available as PNGs in samples/.
 - For fresh Anki stats:
   - If `anki_snapshot.enabled=true`, Tokei exports from `collection.anki2` before reading the file.
-  - Otherwise, Tokei will try the legacy Hashi export (if installed) before reading the file.
+  - Otherwise, Tokei reads the most recent snapshot file on disk (if present).
 - Toggl history note: due to Toggl API limitations, Tokei effectively only pulls a recent window (by default the last 60 days via `toggl.refresh_days_back`).
   - If you've used Toggl for longer than that, set `toggl.baseline_hours` to your lifetime total through yesterday (do NOT include today).
   - Once set, you typically should not keep updating this value; only change it if you corrected your Toggl history/project selection or originally entered the wrong baseline.

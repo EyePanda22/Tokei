@@ -111,46 +111,23 @@ function resolveHashiStatsPath(cfg) {
   return path.join(appdata, "Anki2", profile, outputDir, "anki_stats_snapshot.json");
 }
 
-async function httpGetJson(url, timeoutMs) {
-  const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-  const text = await resp.text();
-  let payload = null;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    payload = null;
-  }
-  if (!resp.ok) {
-    const msg = payload?.error ? String(payload.error) : text.trim();
-    throw new Error(`HTTP ${resp.status} ${msg}`);
-  }
-  return payload;
-}
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function refreshHashiExport(cfg) {
   const hashiCfg = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
-  const host = typeof hashiCfg.host === "string" && hashiCfg.host.trim() ? hashiCfg.host.trim() : "127.0.0.1";
-  const port = Number.isFinite(Number(hashiCfg.port)) ? Number(hashiCfg.port) : 8766;
-  const token = typeof hashiCfg.token === "string" && hashiCfg.token.trim() ? hashiCfg.token.trim() : null;
-  const timeoutMs = Number.isFinite(Number(hashiCfg.refresh_timeout_ms)) ? Number(hashiCfg.refresh_timeout_ms) : 10000;
   const ankiStatsCfg = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
   const requireFresh =
     typeof ankiStatsCfg.require_fresh === "boolean" ? ankiStatsCfg.require_fresh : hashiCfg.require_fresh === false ? false : true;
-
-  function portUrl(p) {
-    return `http://${host}:${p}`;
-  }
-
-  let baseUrl = portUrl(port);
   const statsPath = resolveHashiStatsPath(cfg);
-  const beforeMtime = statsPath && fs.existsSync(statsPath) ? fs.statSync(statsPath).mtimeMs : 0;
 
   const ankiSnap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
   if (ankiSnap.enabled === true) {
+    // Capture mtime *before* export so we can reliably detect that the exporter updated the file.
+    const timeoutMs = 10000;
+    const beforeMtime = statsPath && fs.existsSync(statsPath) ? fs.statSync(statsPath).mtimeMs : 0;
+
     const rules = Array.isArray(ankiSnap.rules) ? ankiSnap.rules : [];
     if (!rules.length) {
       const msg =
@@ -159,7 +136,7 @@ async function refreshHashiExport(cfg) {
         '- Open the Tokei Setup tab\n' +
         '- Under "Anki snapshot rules", click "Add rule" and configure at least one deck/field rule\n' +
         '- Click "Save config.json"\n\n' +
-        'Or disable the built-in exporter (and use the Hashi add-on) by unchecking "Enable built-in Anki snapshot exporter".';
+        'Or disable the built-in exporter if you do not want Anki stats.';
       if (!requireFresh) {
         console.warn(msg);
         return;
@@ -196,68 +173,14 @@ async function refreshHashiExport(cfg) {
     return;
   }
 
-  try {
-    const ping = await httpGetJson(`${baseUrl}/ping`, 1500);
-    if (!ping || ping.ok !== true || ping.name !== "Hashi") {
-      throw new Error("not_hashi");
-    }
-  } catch {
-    // Common case: AnkiConnect is on 8765. Try the next port as a convenience.
-    const altPort = port === 8765 ? 8766 : 8766;
-    if (altPort !== port) {
-      try {
-        const altUrl = portUrl(altPort);
-        const ping2 = await httpGetJson(`${altUrl}/ping`, 1500);
-        if (ping2 && ping2.ok === true && ping2.name === "Hashi") {
-          baseUrl = altUrl;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (baseUrl === portUrl(port)) {
-      // Keep baseUrl as-is and fall through to normal error handling.
-    }
-
-    if (!requireFresh) return;
-    const hasFile = statsPath && fs.existsSync(statsPath);
-    if (hasFile) {
-      const ageMs = Date.now() - fs.statSync(statsPath).mtimeMs;
-      if (ageMs <= 10 * 60 * 1000) {
-        console.warn("Hashi not reachable, using recent existing export:", statsPath);
-        return;
-      }
-    }
-    throw new Error(
-      `Hashi not detected on ${portUrl(port)}. If you use AnkiConnect, it often occupies port 8765; set Hashi to 8766 in Hashi rules.json and in Tokei config.`
-    );
-  }
-
-  const exportUrl = token ? `${baseUrl}/export?token=${encodeURIComponent(token)}` : `${baseUrl}/export`;
-  const exportResp = await httpGetJson(exportUrl, 5000);
-  if (!exportResp || exportResp.ok !== true || exportResp.name !== "Hashi") {
-    throw new Error(
-      `Unexpected response from ${baseUrl}/export. This port may be occupied by another add-on (common: AnkiConnect on 8765).`
-    );
-  }
-
-  if (!statsPath) return;
-
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (fs.existsSync(statsPath)) {
-      const mtime = fs.statSync(statsPath).mtimeMs;
-      if (mtime > beforeMtime) return;
-    }
-    await sleep(250);
-  }
-
-  if (requireFresh) {
-    throw new Error(
-      `Hashi export did not update at ${statsPath}. Is Anki running and unlocked, and is Hashi output_dir set to "hashi_exports"?`
-    );
-  }
+  // Phase 1 deprecation: do not attempt to trigger legacy Hashi exports over HTTP.
+  // If a snapshot file already exists, use it; otherwise, instruct users to enable the built-in exporter.
+  if (statsPath && fs.existsSync(statsPath)) return;
+  if (!requireFresh) return;
+  if (!statsPath) throw new Error("Anki snapshot path could not be resolved on this machine.");
+  throw new Error(
+    `Anki snapshot file not found at ${statsPath}.\n\nFix:\n- Open Setup\n- Enable the built-in Anki snapshot exporter\n- Configure at least one rule\n- Save config.json\n- Try again`
+  );
 }
 
 function ensureDir(p) {
