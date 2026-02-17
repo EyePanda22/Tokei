@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import os
+import platform
 import re
 import sqlite3
 import subprocess
@@ -19,6 +20,7 @@ from urllib import error, parse, request
 
 try:
     from tokei_errors import ApiError, ConfigError
+    from utils import get_anki_path, get_gsm_path
 except ModuleNotFoundError:
     _root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_root / "src" / "tokei"))
@@ -212,7 +214,7 @@ def _extract_bolded_term(surface: str) -> str | None:
 
 
 def _resolve_hashi_known_words_db(cfg: Config) -> Path | None:
-    appdata = os.environ.get("APPDATA")
+    appdata = get_anki_path()
     if not appdata:
         return None
 
@@ -907,10 +909,10 @@ def _update_toggl_cache(con: sqlite3.Connection, cfg: Config, api_token: str, tz
 
 
 def _read_hashi_stats(cfg: Config, warnings: list[str] | None = None) -> tuple[int, int, float]:
-    appdata = os.environ.get("APPDATA")
+    appdata = get_anki_path()
     if not appdata:
         if warnings is not None:
-            warnings.append("Could not read Hashi stats: APPDATA is not set.")
+            warnings.append("Could not read Hashi stats: Failed to detect Anki root")
         return 0, 0, 0.0
 
     profile_dir = Path(appdata) / "Anki2" / cfg.anki_profile
@@ -918,7 +920,12 @@ def _read_hashi_stats(cfg: Config, warnings: list[str] | None = None) -> tuple[i
     if cfg.anki_snapshot_enabled and cfg.anki_snapshot_output_dir.strip():
         output_dir = cfg.anki_snapshot_output_dir.strip()
     else:
-        rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
+        rules_path = Path()
+        plat = platform.system()
+        if plat == 'Windows':
+            rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
+        elif plat == 'Linux':
+            rules_path = Path(appdata) / "Anki2" / "addons21" / "1132527238" / "rules.json"
         if rules_path.exists():
             try:
                 parsed = json.loads(rules_path.read_text(encoding="utf-8"))
@@ -1075,7 +1082,7 @@ def _resolve_gsm_db_path(cfg: Config, warnings: list[str] | None = None) -> Path
     if p.lower() == "off":
         return None
     if p.lower() == "auto" or not p:
-        appdata = os.environ.get("APPDATA")
+        appdata = get_gsm_path()
         if not appdata:
             if warnings is not None:
                 warnings.append("Could not read GSM chars: APPDATA is not set.")
