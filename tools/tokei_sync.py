@@ -1688,10 +1688,12 @@ def main(argv: list[str]) -> int:
             except Exception:
                 return None
 
+        snap: dict[str, Any] | None = None
         if args.no_sync:
-            snap = read_latest_sync_snapshot()
-            if not isinstance(snap, dict):
+            snap_raw = read_latest_sync_snapshot()
+            if not isinstance(snap_raw, dict):
                 raise ConfigError(f"No latest sync snapshot found at: {out_sync_path} (run Sync first).")
+            snap = snap_raw
         else:
             # Regular behavior: refresh Toggl cache (and therefore all derived values).
             assert api_token is not None
@@ -1710,6 +1712,7 @@ def main(argv: list[str]) -> int:
         warnings: list[str] = []
 
         if args.no_sync:
+            assert snap is not None
             synced_at = snap.get("synced_at") if isinstance(snap.get("synced_at"), str) else None
             if not synced_at:
                 warnings.append(f"latest_sync.json missing synced_at: {out_sync_path}")
