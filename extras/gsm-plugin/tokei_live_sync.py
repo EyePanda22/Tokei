@@ -28,7 +28,7 @@ except Exception:
 
         logger = logging.getLogger("tokei.gsm_live")  # type: ignore
 
-API_URL = "http://localhost:55000/api/today-stats"
+API_URL = "http://localhost:7275/api/today-stats"
 
 
 def _default_db_path() -> str:

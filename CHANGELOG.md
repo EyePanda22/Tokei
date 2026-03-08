@@ -4,13 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
-## 0.8.2 - 2026-02-17
+## 0.8.4 - 2026-03-08
 
 ### Changed
-- CLI: stop attempting legacy Hashi HTTP exports; when the built-in snapshot exporter is disabled, Tokei now reads the most recent snapshot file on disk (if present).
+- GSM live sessions plugin template: updated the local GSM API endpoint from `http://localhost:55000/api/today-stats` to `http://localhost:7275/api/today-stats`.
+- Docs: updated GSM live sessions setup notes to reflect the new `7275` port.
+
+## 0.8.3 - 2026-02-17
+
+### Changed
+- Pipeline (CLI + Electron UI): stop attempting legacy Hashi HTTP exports; when the built-in snapshot exporter is disabled, Tokei now reads the most recent snapshot file on disk (if present).
+- Docs: clarified the Anki stats fallback behavior when the built-in snapshot exporter is disabled.
 
 ### Fixed
-- CLI: fix Anki snapshot export update detection (mtime check now correctly compares against the pre-export timestamp).
+- Pipeline (CLI + Electron UI): fix Anki snapshot export update detection (mtime check now correctly compares against the pre-export timestamp).
+- Dev: reduce noisy editor diagnostics in `tools/tokei_sync.py` (Pylance "snap possibly unbound") without changing runtime behavior.
+- Dev: stop tracking `Tokei.code-workspace` changes in git (workspace file is user-specific).
+
+## 0.8.2 - 2026-02-13
+
+### Fixed
 - GSM live sessions plugin templates: updated `logger` import to support newer GSM versions (fallback kept for older installs) to prevent `ModuleNotFoundError: GameSentenceMiner.util.configuration` from breaking user plugins.
 
 ## 0.8.1 - 2026-01-27

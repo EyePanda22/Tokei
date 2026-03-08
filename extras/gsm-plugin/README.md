@@ -5,7 +5,7 @@ into a small SQLite database that Tokei can read later (even if GSM is closed).
 
 ## What it does
 
-- Calls GSM's local API: `http://localhost:55000/api/today-stats`
+- Calls GSM's local API: `http://localhost:7275/api/today-stats`
 - Upserts each session into: `%TOKEI_USER_ROOT%\cache\gsm_live.sqlite` (or `%APPDATA%\Tokei\cache\gsm_live.sqlite` if `TOKEI_USER_ROOT` is not set)
 - Uses a stable session key so it will not double-count when the plugin runs repeatedly
 
