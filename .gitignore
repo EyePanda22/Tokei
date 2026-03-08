@@ -13,6 +13,7 @@
 /CHATGPT_CONTEXT.md
 **/__pycache__/
 *.py[cod]
+*.log
 
 # Runtime user config (generated at first run)
 config.json
