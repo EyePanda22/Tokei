@@ -15,7 +15,7 @@ Note: Tokei runs as a console app (CLI), and also includes a setup-first UI (web
 Tokei is a standalone sync + report generator that combines:
 
 - Toggl (API token) for lifetime + today immersion (with description breakdown)
-- Anki stats (built-in snapshot exporter; legacy Hashi add-on optional) for retention + review totals
+- Anki stats (built-in snapshot exporter) for retention + review totals
 - Mokuro (volume-data.json) for manga characters read
 - Ttsu Reader (ttu-reader-data/statistics_*.json) for novel characters read
 - GameSentenceMiner (gsm.db) for GSM characters read
@@ -67,10 +67,6 @@ Tip: use File > Open Logs to open the log folder if anything fails.
 
 Optional: run `Tokei-UI.bat` any time to edit config, validate Anki export, test PNG rendering, and run reports (web UI)
 - Dev/electron: `npm run ui:electron`
-
-Legacy (deprecated): Hashi Anki add-on (not recommended for new users):
-- In Anki: `Tools > Add-ons > Get Add-ons...` and enter `1132527238`
-- Link: https://ankiweb.net/shared/info/1132527238
 
 The Electron build generates HTML + PNG reports out of the box. If you are running from source / a portable folder, see the PNG setup notes below.
 
@@ -146,8 +142,7 @@ Troubleshooting:
 Tokei reads from these external tools but does not modify them:
 
 - Anki (snapshot producer)
-  - Built-in snapshot exporter (recommended): reads your Anki profile `collection.anki2` and writes snapshot files under `hashi_exports/` (configurable)
-  - Hashi (Anki add-on, legacy/deprecated): writes the same snapshot files under `hashi_exports/` (configurable)
+  - Built-in snapshot exporter (recommended): reads your Anki profile `collection.anki2` and writes snapshot files under `anki_snapshot/` (configurable)
 - GSM (Game Sentence Miner)
   - Reads gsm.db (auto path uses %APPDATA%\GameSentenceMiner\gsm.db)
   - If missing, Tokei warns and continues

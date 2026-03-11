@@ -164,6 +164,7 @@ let activeRuleRow = null;
 let discoveredAnki = null;
 
 const KNOWN_TABS = ["run", "setup", "sources", "getting-started", "logs"];
+const DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR = "anki_snapshot";
 
 const WIZARD_VERSION = 1;
 const WIZARD_SEEN_KEY = `tokei_setup_wizard_seen_v${WIZARD_VERSION}`;
@@ -343,7 +344,7 @@ function getDefaultConfig() {
     mokuro: { enabled: false, volume_data_path: "" },
     ttsu: { enabled: false, data_dir: "" },
     gsm: { enabled: false, db_path: "auto" },
-    anki_snapshot: { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] },
+    anki_snapshot: { enabled: false, stats_range_days: null, output_dir: DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR, rules: [] },
     launch: { open_on_startup: false, start_minimized_to_tray: false, close_minimizes_to_tray: false },
   };
 }
@@ -468,7 +469,7 @@ function renderGettingStartedCardV2(card) {
       Add your Toggl token (required), configure Anki snapshot rules (optional), then click Save to write <code>config.json</code>.
     </div>
     <div class="hint">
-      Anki stats come from the built-in snapshot exporter (recommended). Legacy Hashi add-on exports are still supported for existing users.
+      Anki stats come from the built-in snapshot exporter (recommended). If the exporter is disabled, Tokei can still read an existing snapshot file on disk.
     </div>
 
     <div class="subhead">Step 2: Sources</div>
@@ -885,9 +886,7 @@ async function loadConfig() {
   }
 
   const ankiStats = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
-  const hashi = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
-  const requireFresh =
-    typeof ankiStats.require_fresh === "boolean" ? ankiStats.require_fresh : hashi.require_fresh === false ? false : true;
+  const requireFresh = typeof ankiStats.require_fresh === "boolean" ? ankiStats.require_fresh : true;
   if ($("anki-nonblocking")) $("anki-nonblocking").checked = !requireFresh;
 
   const toggl = cfg.toggl && typeof cfg.toggl === "object" ? cfg.toggl : {};
@@ -898,7 +897,7 @@ async function loadConfig() {
 
   const snap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
   $("anki-enabled").checked = snap.enabled === true;
-  $("anki-output-dir").value = typeof snap.output_dir === "string" ? snap.output_dir : "hashi_exports";
+  $("anki-output-dir").value = typeof snap.output_dir === "string" ? snap.output_dir : DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR;
 
   const ankiProfileInput = $("anki-profile");
   if (ankiProfileInput) {
@@ -945,8 +944,6 @@ async function saveConfig(currentCfg) {
 
   cfg.anki_stats = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
   cfg.anki_stats.require_fresh = $("anki-nonblocking")?.checked ? false : true;
-  // Back-compat: keep older configs' `hashi.require_fresh` in sync if present.
-  if (cfg.hashi && typeof cfg.hashi === "object") cfg.hashi.require_fresh = cfg.anki_stats.require_fresh;
 
   cfg.toggl = cfg.toggl && typeof cfg.toggl === "object" ? cfg.toggl : {};
   const baselineText = ($("toggl-baseline-hms")?.value || "").trim();
@@ -961,7 +958,7 @@ async function saveConfig(currentCfg) {
   cfg.anki_snapshot = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
   cfg.anki_snapshot.enabled = $("anki-enabled").checked;
   const od = $("anki-output-dir").value.trim();
-  cfg.anki_snapshot.output_dir = od || "hashi_exports";
+  cfg.anki_snapshot.output_dir = od || DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR;
   cfg.anki_snapshot.rules = readRulesFromTable();
 
   cfg.anki_profile = getAnkiProfileFromUi();

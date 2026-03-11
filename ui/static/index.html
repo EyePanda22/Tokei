@@ -175,11 +175,11 @@
               <button id="anki-advanced-close" class="panel-close" type="button" title="Hide">×</button>
               <div class="row">
                 <div class="hint">
-                  Output dir controls where Anki snapshot files are written. Default is <code>hashi_exports</code> (legacy name). Leave it unless you know you need to change it.
+                  Output dir controls where Anki snapshot files are written. Default is <code>anki_snapshot</code>. Leave it unless you know you need to change it.
                 </div>
               </div>
               <div class="row">
-                <input id="anki-output-dir" class="input" type="text" placeholder="output_dir (default hashi_exports)" />
+                <input id="anki-output-dir" class="input" type="text" placeholder="output_dir (default anki_snapshot)" />
               </div>
             </div>
 
@@ -505,16 +505,13 @@
             <details class="details">
               <summary>Advanced</summary>
               <div class="hint">
-                - Anki output dir: defaults to <code>hashi_exports</code> (recommended). Change only if you know why.
+                - Anki output dir: defaults to <code>anki_snapshot</code> (recommended). Change only if you know why.
               </div>
               <div class="hint">
                 - GSM live sessions: optional. It exports “today session totals” to <code>%TOKEI_USER_ROOT%\\cache\\gsm_live.sqlite</code> while GSM is running.
               </div>
               <div class="hint">
                 - If you installed both the CLI and Electron builds, both typically share <code>%APPDATA%\\Tokei</code> via <code>TOKEI_USER_ROOT</code>.
-              </div>
-              <div class="hint">
-                - Legacy option: you can use the Hashi Anki add-on as the snapshot producer instead (not recommended).
               </div>
             </details>
           </div>

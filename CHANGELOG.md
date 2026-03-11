@@ -9,6 +9,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ### Changed
 - GSM live sessions plugin template: updated the local GSM API endpoint from `http://localhost:55000/api/today-stats` to `http://localhost:7275/api/today-stats`.
 - Docs: updated GSM live sessions setup notes to reflect the new `7275` port.
+- Anki snapshot migration: renamed the default snapshot output folder from `hashi_exports` to `anki_snapshot`, with compatibility copying from the legacy folder when needed.
+- Pipeline/UI: removed remaining runtime dependency on the Hashi add-on config and updated Anki snapshot wording accordingly.
 
 ## 0.8.3 - 2026-02-17
 

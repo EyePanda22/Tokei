@@ -14,6 +14,11 @@ from typing import Any
 import shutil
 
 
+DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR = "anki_snapshot"
+LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR = "hashi_exports"
+SNAPSHOT_MIGRATION_FILES = ("anki_stats_snapshot.json", "known_words.sqlite")
+
+
 @dataclass(frozen=True)
 class AnkiSnapshotRule:
     rule_id: str
@@ -39,6 +44,13 @@ def _utc_now_iso() -> str:
         .isoformat()
         .replace("+00:00", "Z")
     )
+
+
+def _normalize_anki_snapshot_output_dir(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw or raw == LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR:
+        return DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR
+    return raw
 
 
 def _utc_iso_from_epoch_ms(epoch_ms: int) -> str:
@@ -89,7 +101,7 @@ def _load_config(root: Path) -> tuple[str, AnkiSnapshotConfig]:
     enabled = bool(snap_raw.get("enabled", False))
     stats_range_days_raw = snap_raw.get("stats_range_days")
     stats_range_days = int(stats_range_days_raw) if isinstance(stats_range_days_raw, int) else None
-    output_dir = str(snap_raw.get("output_dir") or "hashi_exports").strip() or "hashi_exports"
+    output_dir = _normalize_anki_snapshot_output_dir(snap_raw.get("output_dir"))
 
     rules: list[AnkiSnapshotRule] = []
     rules_raw = snap_raw.get("rules")
@@ -158,6 +170,27 @@ def _resolve_output_dir(appdata: str, profile: str, output_dir: str) -> Path:
     if base.is_absolute():
         return base
     return Path(appdata) / "Anki2" / profile / output_dir
+
+
+def _migrate_legacy_snapshot_outputs(appdata: str, profile: str, output_dir: str) -> None:
+    if output_dir != DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR:
+        return
+
+    legacy_dir = _resolve_output_dir(appdata, profile, LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR)
+    target_dir = _resolve_output_dir(appdata, profile, DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR)
+    if not legacy_dir.exists():
+        return
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for name in SNAPSHOT_MIGRATION_FILES:
+            src = legacy_dir / name
+            dst = target_dir / name
+            if src.exists() and not dst.exists():
+                shutil.copy2(src, dst)
+    except Exception:
+        # Export can proceed even if the legacy snapshot copy could not be created.
+        return
 
 
 def _resolve_collection_db(appdata: str, profile: str) -> Path:
@@ -540,6 +573,7 @@ def export_snapshot(*, root: Path, trigger: str) -> Path:
     if not collection_db.exists():
         raise RuntimeError(f"Anki collection DB not found: {collection_db}")
 
+    _migrate_legacy_snapshot_outputs(appdata, profile, cfg.output_dir)
     out_dir = _resolve_output_dir(appdata, profile, cfg.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stats_path = out_dir / "anki_stats_snapshot.json"

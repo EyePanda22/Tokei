@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import shutil
 import sys
 import unicodedata
 from collections import defaultdict
@@ -61,6 +62,9 @@ class TogglMinStartDateError(RuntimeError):
 
 
 _SPACY_NLP: Any | None = None
+DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR = "anki_snapshot"
+LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR = "hashi_exports"
+SNAPSHOT_MIGRATION_FILES = ("anki_stats_snapshot.json", "known_words.sqlite")
 
 
 def _normalize_surface_for_identity(surface: str) -> str:
@@ -68,6 +72,13 @@ def _normalize_surface_for_identity(surface: str) -> str:
     s = unicodedata.normalize("NFC", s)
     s = re.sub(r"\s+", " ", s)
     return s
+
+
+def _normalize_anki_snapshot_output_dir(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw or raw == LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR:
+        return DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR
+    return raw
 
 
 def _content_key_for_lexeme(normalized_surface: str, rule_id: str) -> str:
@@ -211,26 +222,35 @@ def _extract_bolded_term(surface: str) -> str | None:
     return candidates[0]
 
 
-def _resolve_hashi_known_words_db(cfg: Config) -> Path | None:
+def _migrate_legacy_anki_snapshot_outputs(appdata: str, profile: str, output_dir: str) -> None:
+    if output_dir != DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR:
+        return
+
+    legacy_dir = Path(appdata) / "Anki2" / profile / LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR
+    target_dir = Path(appdata) / "Anki2" / profile / DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR
+    if not legacy_dir.exists():
+        return
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for name in SNAPSHOT_MIGRATION_FILES:
+            src = legacy_dir / name
+            dst = target_dir / name
+            if src.exists() and not dst.exists():
+                shutil.copy2(src, dst)
+    except Exception:
+        # Runtime reads can proceed even if the legacy copy failed.
+        return
+
+
+def _resolve_anki_snapshot_known_words_db(cfg: Config) -> Path | None:
     appdata = os.environ.get("APPDATA")
     if not appdata:
         return None
 
-    output_dir = "hashi_exports"
-    if cfg.anki_snapshot_enabled and cfg.anki_snapshot_output_dir.strip():
-        output_dir = cfg.anki_snapshot_output_dir.strip()
-    else:
-        rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
-        if rules_path.exists():
-            try:
-                parsed = json.loads(rules_path.read_text(encoding="utf-8"))
-                settings = parsed.get("settings") if isinstance(parsed, dict) else None
-                if isinstance(settings, dict):
-                    od = settings.get("output_dir")
-                    if isinstance(od, str) and od.strip():
-                        output_dir = od.strip()
-            except Exception:
-                pass
+    output_dir = _normalize_anki_snapshot_output_dir(cfg.anki_snapshot_output_dir)
+    if output_dir == DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR:
+        _migrate_legacy_anki_snapshot_outputs(appdata, cfg.anki_profile, output_dir)
 
     base = Path(output_dir)
     if not base.is_absolute():
@@ -239,13 +259,13 @@ def _resolve_hashi_known_words_db(cfg: Config) -> Path | None:
     return db_path if db_path.exists() else None
 
 
-def _phase2_import_hashi_lexemes(
+def _phase2_import_anki_snapshot_lexemes(
     con: sqlite3.Connection,
     *,
     cfg: Config,
     today: date,
 ) -> int:
-    src_db = _resolve_hashi_known_words_db(cfg)
+    src_db = _resolve_anki_snapshot_known_words_db(cfg)
     if src_db is None:
         return 0
 
@@ -550,7 +570,7 @@ def _load_config(path: Path) -> Config:
 
     anki_snapshot = raw.get("anki_snapshot") or {}
     anki_snapshot_enabled = bool(anki_snapshot.get("enabled", False))
-    anki_snapshot_output_dir = str(anki_snapshot.get("output_dir") or "hashi_exports").strip() or "hashi_exports"
+    anki_snapshot_output_dir = _normalize_anki_snapshot_output_dir(anki_snapshot.get("output_dir"))
 
     return Config(
         anki_profile=anki_profile,
@@ -906,29 +926,17 @@ def _update_toggl_cache(con: sqlite3.Connection, cfg: Config, api_token: str, tz
     _set_meta(con, "last_report_day", today.isoformat())
 
 
-def _read_hashi_stats(cfg: Config, warnings: list[str] | None = None) -> tuple[int, int, float]:
+def _read_anki_snapshot_stats(cfg: Config, warnings: list[str] | None = None) -> tuple[int, int, float]:
     appdata = os.environ.get("APPDATA")
     if not appdata:
         if warnings is not None:
-            warnings.append("Could not read Hashi stats: APPDATA is not set.")
+            warnings.append("Could not read Anki snapshot stats: APPDATA is not set.")
         return 0, 0, 0.0
 
     profile_dir = Path(appdata) / "Anki2" / cfg.anki_profile
-    output_dir = "hashi_exports"
-    if cfg.anki_snapshot_enabled and cfg.anki_snapshot_output_dir.strip():
-        output_dir = cfg.anki_snapshot_output_dir.strip()
-    else:
-        rules_path = Path(appdata) / "Anki2" / "addons21" / "Hashi" / "rules.json"
-        if rules_path.exists():
-            try:
-                parsed = json.loads(rules_path.read_text(encoding="utf-8"))
-                settings = parsed.get("settings") if isinstance(parsed, dict) else None
-                if isinstance(settings, dict):
-                    od = settings.get("output_dir")
-                    if isinstance(od, str) and od.strip():
-                        output_dir = od.strip()
-            except Exception:
-                pass
+    output_dir = _normalize_anki_snapshot_output_dir(cfg.anki_snapshot_output_dir)
+    if output_dir == DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR:
+        _migrate_legacy_anki_snapshot_outputs(appdata, cfg.anki_profile, output_dir)
 
     stats_path = Path(output_dir) / "anki_stats_snapshot.json"
     if not stats_path.is_absolute():
@@ -937,14 +945,14 @@ def _read_hashi_stats(cfg: Config, warnings: list[str] | None = None) -> tuple[i
     if not stats_path.exists():
         if warnings is not None:
             warnings.append(
-                f"Hashi stats not found: {stats_path} (run Hashi export in Anki, or check anki_profile)."
+                f"Anki snapshot stats not found: {stats_path} (run the Anki snapshot export, or check anki_profile)."
             )
         return 0, 0, 0.0
     try:
         raw = json.loads(stats_path.read_text(encoding="utf-8"))
     except Exception as e:
         if warnings is not None:
-            warnings.append(f"Failed to read Hashi stats JSON: {stats_path} ({type(e).__name__}).")
+            warnings.append(f"Failed to read Anki snapshot JSON: {stats_path} ({type(e).__name__}).")
         return 0, 0, 0.0
     totals = raw.get("totals") or {}
     cards_studied = int(totals.get("cards_studied") or 0)
@@ -1601,7 +1609,7 @@ def main(argv: list[str]) -> int:
             words_con.execute("PRAGMA journal_mode=DELETE;")
             words_con.execute("PRAGMA synchronous=NORMAL;")
             _ensure_words_schema(words_con)
-            _phase2_import_hashi_lexemes(words_con, cfg=cfg, today=today_for_phase2)
+            _phase2_import_anki_snapshot_lexemes(words_con, cfg=cfg, today=today_for_phase2)
             _phase2_ingest_known_csv(
                 words_con,
                 root=root,
@@ -1799,7 +1807,7 @@ def main(argv: list[str]) -> int:
             gsm_chars_total = (
                 _read_gsm_chars(cfg, root=root, today=today, tz=tz, warnings=warnings) if cfg.gsm_enabled else 0
             )
-            anki_total, anki_reviews, anki_true_retention = _read_hashi_stats(cfg, warnings=warnings)
+            anki_total, anki_reviews, anki_true_retention = _read_anki_snapshot_stats(cfg, warnings=warnings)
 
         # For deltas, compare against the previous report before the one we are generating.
         # If overwriting today's report, exclude that row itself.

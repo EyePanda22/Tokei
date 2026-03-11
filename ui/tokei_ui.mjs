@@ -13,6 +13,9 @@ const __dirname = path.dirname(__filename);
 const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_ROOT) : path.resolve(__dirname, "..");
 const defaultUserRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "Tokei") : appRoot;
 const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : defaultUserRoot;
+const DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR = "anki_snapshot";
+const LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR = "hashi_exports";
+const SNAPSHOT_MIGRATION_FILES = ["anki_stats_snapshot.json", "known_words.sqlite"];
 
 function json(res, code, payload) {
   const body = Buffer.from(JSON.stringify(payload, null, 2) + "\n", "utf8");
@@ -64,6 +67,37 @@ function writeJsonAtomic(filePath, obj) {
     // ignore
   }
   fs.renameSync(tmp, filePath);
+}
+
+function normalizeAnkiSnapshotOutputDir(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw || raw === LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR) return DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR;
+  return raw;
+}
+
+function normalizeConfig(raw) {
+  const cfg = raw && typeof raw === "object" ? { ...raw } : {};
+  const ankiSnapshot =
+    cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? { ...cfg.anki_snapshot } : {};
+  ankiSnapshot.output_dir = normalizeAnkiSnapshotOutputDir(ankiSnapshot.output_dir);
+  cfg.anki_snapshot = ankiSnapshot;
+  return cfg;
+}
+
+function readConfigWithMigration() {
+  const cfgPath = getConfigPath();
+  const r = safeReadJson(cfgPath);
+  if (!r.ok || !r.value || typeof r.value !== "object") return { ...r, path: cfgPath };
+  const normalized = normalizeConfig(r.value);
+  const changed = JSON.stringify(normalized) !== JSON.stringify(r.value);
+  if (changed) {
+    try {
+      writeJsonAtomic(cfgPath, normalized);
+    } catch {
+      // ignore persistence errors; the normalized config is still usable in memory
+    }
+  }
+  return { ok: true, error: null, value: normalized, changed, path: cfgPath };
 }
 
 function getConfigPath() {
@@ -240,37 +274,49 @@ function getNodeRunnerEnv() {
   return env;
 }
 
-function resolveHashiStatsPath(cfg) {
+function getAnkiProfileName(cfg) {
+  return typeof cfg?.anki_profile === "string" && cfg.anki_profile.trim() ? cfg.anki_profile.trim() : "User 1";
+}
+
+function getAnkiSnapshotOutputDir(cfg) {
+  const ankiSnap = cfg?.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : null;
+  return normalizeAnkiSnapshotOutputDir(ankiSnap?.output_dir);
+}
+
+function resolveAnkiSnapshotBaseDir(cfg, outputDir = getAnkiSnapshotOutputDir(cfg)) {
   const appdata = process.env.APPDATA;
   if (!appdata) return null;
-  const profile = typeof cfg?.anki_profile === "string" && cfg.anki_profile.trim() ? cfg.anki_profile.trim() : "User 1";
+  if (path.isAbsolute(outputDir)) return outputDir;
+  return path.join(appdata, "Anki2", getAnkiProfileName(cfg), outputDir);
+}
 
-  let outputDir = "hashi_exports";
-  let usingInternalProducer = false;
+function migrateLegacyAnkiSnapshotFiles(cfg) {
+  const outputDir = getAnkiSnapshotOutputDir(cfg);
+  if (outputDir !== DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR) return;
+
+  const targetBase = resolveAnkiSnapshotBaseDir(cfg, DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR);
+  const legacyBase = resolveAnkiSnapshotBaseDir(cfg, LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR);
+  if (!targetBase || !legacyBase || !fs.existsSync(legacyBase)) return;
+
   try {
-    const ankiSnap = cfg?.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : null;
-    if (ankiSnap && ankiSnap.enabled === true) {
-      const od = ankiSnap.output_dir;
-      if (typeof od === "string" && od.trim()) outputDir = od.trim();
-      usingInternalProducer = true;
+    fs.mkdirSync(targetBase, { recursive: true });
+    for (const name of SNAPSHOT_MIGRATION_FILES) {
+      const legacyPath = path.join(legacyBase, name);
+      const targetPath = path.join(targetBase, name);
+      if (fs.existsSync(legacyPath) && !fs.existsSync(targetPath)) {
+        fs.copyFileSync(legacyPath, targetPath);
+      }
     }
   } catch {
-    // ignore
+    // Never fail the UI server because legacy snapshot files could not be copied.
   }
+}
 
-  if (!usingInternalProducer) {
-    try {
-      const rulesPath = path.join(appdata, "Anki2", "addons21", "Hashi", "rules.json");
-      const raw = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
-      const cfgOut = raw?.settings?.output_dir;
-      if (typeof cfgOut === "string" && cfgOut.trim()) outputDir = cfgOut.trim();
-    } catch {
-      // ignore
-    }
-  }
-
-  if (path.isAbsolute(outputDir)) return path.join(outputDir, "anki_stats_snapshot.json");
-  return path.join(appdata, "Anki2", profile, outputDir, "anki_stats_snapshot.json");
+function resolveAnkiSnapshotStatsPath(cfg) {
+  migrateLegacyAnkiSnapshotFiles(cfg);
+  const baseDir = resolveAnkiSnapshotBaseDir(cfg);
+  if (!baseDir) return null;
+  return path.join(baseDir, "anki_stats_snapshot.json");
 }
 
 function getDefaultOutputDir() {
@@ -387,19 +433,18 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "GET" && p === "/api/config") {
-    const cfgPath = getConfigPath();
-    const r = safeReadJson(cfgPath);
-    return json(res, 200, { ok: r.ok, path: cfgPath, error: r.error, config: r.value || {} });
+    const r = readConfigWithMigration();
+    return json(res, 200, { ok: r.ok, path: r.path, error: r.error, config: r.value || {} });
   }
 
   if (req.method === "GET" && p === "/api/paths") {
-    const cfg = safeReadJson(getConfigPath()).value || {};
+    const cfg = readConfigWithMigration().value || {};
     const outRoot = resolveOutputRoot(cfg);
     const htmlDir = path.join(outRoot, "HTML");
     const latest = safeReadJson(getLatestStatsPath()).value || null;
     const reportNo = latest?.report_no ?? null;
     const htmlPath = reportNo != null ? path.join(htmlDir, `Tokei Report ${reportNo}.html`) : null;
-    const statsPath = resolveHashiStatsPath(cfg);
+    const statsPath = resolveAnkiSnapshotStatsPath(cfg);
     return json(res, 200, {
       ok: true,
       configPath: getConfigPath(),
@@ -427,7 +472,7 @@ async function handleApi(req, res) {
       return json(res, 400, { ok: false, error: "config must be a JSON object" });
     }
     try {
-      writeJsonAtomic(cfgPath, parsed);
+      writeJsonAtomic(cfgPath, normalizeConfig(parsed));
       return json(res, 200, { ok: true, path: cfgPath });
     } catch (e) {
       return json(res, 500, { ok: false, error: String(e?.message || e) });
@@ -495,7 +540,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && p === "/api/anki/discover") {
-    const cfg = safeReadJson(getConfigPath()).value || {};
+    const cfg = readConfigWithMigration().value || {};
     let bodyProfile = "";
     try {
       const raw = await readBody(req);
@@ -519,7 +564,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && p === "/api/anki/test-export") {
-    const cfg = safeReadJson(getConfigPath()).value || {};
+    const cfg = readConfigWithMigration().value || {};
     try {
       const snap = cfg?.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
       const enabled = snap?.enabled === true;
@@ -559,7 +604,7 @@ async function handleApi(req, res) {
     } catch {
       // ignore
     }
-    const statsPath = resolveHashiStatsPath(cfg);
+    const statsPath = resolveAnkiSnapshotStatsPath(cfg);
     const beforeMtime = statsPath && fs.existsSync(statsPath) ? fs.statSync(statsPath).mtimeMs : 0;
     const py = getPythonCommand();
     const pyArgs = [...getPythonArgsPrefix(), path.join(appRoot, "tools", "tokei_anki_export.py"), "--trigger", "ui_test"];
@@ -931,8 +976,8 @@ async function handleApi(req, res) {
       if (rSync.code !== 0) {
         const latest = safeReadJson(getLatestStatsPath()).value;
         const latestSync = safeReadJson(getLatestSyncPath()).value;
-        const cfg = safeReadJson(getConfigPath()).value || {};
-        const statsPath = resolveHashiStatsPath(cfg);
+        const cfg = readConfigWithMigration().value || {};
+        const statsPath = resolveAnkiSnapshotStatsPath(cfg);
         const ankiStats = statsPath ? safeReadJson(statsPath).value : null;
         const exportedAt = ankiStats?.meta?.exported_at || null;
         return json(res, 200, {
@@ -964,8 +1009,8 @@ async function handleApi(req, res) {
 
     const latest = safeReadJson(getLatestStatsPath()).value;
     const latestSync = safeReadJson(getLatestSyncPath()).value;
-    const cfg = safeReadJson(getConfigPath()).value || {};
-    const statsPath = resolveHashiStatsPath(cfg);
+    const cfg = readConfigWithMigration().value || {};
+    const statsPath = resolveAnkiSnapshotStatsPath(cfg);
     const ankiStats = statsPath ? safeReadJson(statsPath).value : null;
     const exportedAt = ankiStats?.meta?.exported_at || null;
 
@@ -999,8 +1044,8 @@ async function handleApi(req, res) {
     const r = await runProcess(process.execPath, nodeArgs, { cwd: appRoot, env });
 
     const latest = safeReadJson(getLatestStatsPath()).value;
-    const cfg = safeReadJson(getConfigPath()).value || {};
-    const statsPath = resolveHashiStatsPath(cfg);
+    const cfg = readConfigWithMigration().value || {};
+    const statsPath = resolveAnkiSnapshotStatsPath(cfg);
     const ankiStats = statsPath ? safeReadJson(statsPath).value : null;
     const exportedAt = ankiStats?.meta?.exported_at || null;
 
@@ -1016,7 +1061,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && p === "/api/open-output") {
-    const cfg = safeReadJson(getConfigPath()).value || {};
+    const cfg = readConfigWithMigration().value || {};
     const outRoot = resolveOutputRoot(cfg);
     try {
       openExternal(outRoot);
@@ -1027,7 +1072,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && p === "/api/open-latest-html") {
-    const cfg = safeReadJson(getConfigPath()).value || {};
+    const cfg = readConfigWithMigration().value || {};
     const outRoot = resolveOutputRoot(cfg);
     const htmlDir = path.join(outRoot, "HTML");
     const latest = safeReadJson(getLatestStatsPath()).value || null;

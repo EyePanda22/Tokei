@@ -13,6 +13,9 @@ const appRoot = process.env.TOKEI_APP_ROOT ? path.resolve(process.env.TOKEI_APP_
 const defaultUserRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "Tokei") : appRoot;
 const userRoot = process.env.TOKEI_USER_ROOT ? path.resolve(process.env.TOKEI_USER_ROOT) : defaultUserRoot;
 const DEFAULT_THEME = "dark-graphite";
+const DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR = "anki_snapshot";
+const LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR = "hashi_exports";
+const SNAPSHOT_MIGRATION_FILES = ["anki_stats_snapshot.json", "known_words.sqlite"];
 const APP_VERSION = "0.8.4 (alpha)";
 
 function initRuntimeLogPath() {
@@ -38,6 +41,21 @@ function logRuntime(event, details = "") {
   }
 }
 
+function normalizeAnkiSnapshotOutputDir(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw || raw === LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR) return DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR;
+  return raw;
+}
+
+function normalizeConfig(raw) {
+  const cfg = raw && typeof raw === "object" ? { ...raw } : {};
+  const ankiSnapshot =
+    cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? { ...cfg.anki_snapshot } : {};
+  ankiSnapshot.output_dir = normalizeAnkiSnapshotOutputDir(ankiSnapshot.output_dir);
+  cfg.anki_snapshot = ankiSnapshot;
+  return cfg;
+}
+
 function loadConfig() {
   const configPath = path.join(userRoot, "config.json");
   if (!fs.existsSync(configPath)) return {};
@@ -51,7 +69,7 @@ function loadConfig() {
   try {
     if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
     const raw = JSON.parse(text);
-    return raw && typeof raw === "object" ? raw : {};
+    return normalizeConfig(raw);
   } catch {
     console.warn("Warning: config.json could not be parsed. Using defaults.");
     return {};
@@ -73,54 +91,59 @@ function getPythonArgsPrefix() {
   return raw.split(" ").filter((v) => v.trim());
 }
 
-function resolveHashiStatsPath(cfg) {
+function getAnkiProfileName(cfg) {
+  return typeof cfg?.anki_profile === "string" && cfg.anki_profile.trim() ? cfg.anki_profile.trim() : "User 1";
+}
+
+function getAnkiSnapshotOutputDir(cfg) {
+  const ankiSnap = cfg?.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : null;
+  return normalizeAnkiSnapshotOutputDir(ankiSnap?.output_dir);
+}
+
+function resolveAnkiSnapshotBaseDir(cfg, outputDir = getAnkiSnapshotOutputDir(cfg)) {
   const appdata = process.env.APPDATA;
   if (!appdata) return null;
-  const profile =
-    typeof cfg.anki_profile === "string" && cfg.anki_profile.trim() ? cfg.anki_profile.trim() : "User 1";
+  if (path.isAbsolute(outputDir)) return outputDir;
+  return path.join(appdata, "Anki2", getAnkiProfileName(cfg), outputDir);
+}
 
-  // Default location
-  let outputDir = "hashi_exports";
+function migrateLegacyAnkiSnapshotFiles(cfg) {
+  const outputDir = getAnkiSnapshotOutputDir(cfg);
+  if (outputDir !== DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR) return;
 
-  // If Tokei is acting as the snapshot producer, prefer its configured output_dir.
-  let usingInternalProducer = false;
+  const targetBase = resolveAnkiSnapshotBaseDir(cfg, DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR);
+  const legacyBase = resolveAnkiSnapshotBaseDir(cfg, LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR);
+  if (!targetBase || !legacyBase || !fs.existsSync(legacyBase)) return;
+
   try {
-    const ankiSnap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : null;
-    if (ankiSnap && ankiSnap.enabled === true) {
-      const od = ankiSnap.output_dir;
-      if (typeof od === "string" && od.trim()) outputDir = od.trim();
-      usingInternalProducer = true;
+    fs.mkdirSync(targetBase, { recursive: true });
+    for (const name of SNAPSHOT_MIGRATION_FILES) {
+      const legacyPath = path.join(legacyBase, name);
+      const targetPath = path.join(targetBase, name);
+      if (fs.existsSync(legacyPath) && !fs.existsSync(targetPath)) {
+        fs.copyFileSync(legacyPath, targetPath);
+      }
     }
   } catch {
-    // ignore
+    // Never fail startup because a legacy copy could not be created.
   }
+}
 
-  // If Hashi is installed, prefer its configured output_dir.
-  if (!usingInternalProducer) {
-    try {
-      const rulesPath = path.join(appdata, "Anki2", "addons21", "Hashi", "rules.json");
-      const raw = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
-      const cfgOut = raw?.settings?.output_dir;
-      if (typeof cfgOut === "string" && cfgOut.trim()) outputDir = cfgOut.trim();
-    } catch {
-      // ignore
-    }
-  }
-
-  if (path.isAbsolute(outputDir)) return path.join(outputDir, "anki_stats_snapshot.json");
-  return path.join(appdata, "Anki2", profile, outputDir, "anki_stats_snapshot.json");
+function resolveAnkiSnapshotStatsPath(cfg) {
+  migrateLegacyAnkiSnapshotFiles(cfg);
+  const baseDir = resolveAnkiSnapshotBaseDir(cfg);
+  if (!baseDir) return null;
+  return path.join(baseDir, "anki_stats_snapshot.json");
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function refreshHashiExport(cfg) {
-  const hashiCfg = cfg.hashi && typeof cfg.hashi === "object" ? cfg.hashi : {};
+async function refreshAnkiSnapshot(cfg) {
   const ankiStatsCfg = cfg.anki_stats && typeof cfg.anki_stats === "object" ? cfg.anki_stats : {};
-  const requireFresh =
-    typeof ankiStatsCfg.require_fresh === "boolean" ? ankiStatsCfg.require_fresh : hashiCfg.require_fresh === false ? false : true;
-  const statsPath = resolveHashiStatsPath(cfg);
+  const requireFresh = typeof ankiStatsCfg.require_fresh === "boolean" ? ankiStatsCfg.require_fresh : true;
+  const statsPath = resolveAnkiSnapshotStatsPath(cfg);
 
   const ankiSnap = cfg.anki_snapshot && typeof cfg.anki_snapshot === "object" ? cfg.anki_snapshot : {};
   if (ankiSnap.enabled === true) {
@@ -173,7 +196,6 @@ async function refreshHashiExport(cfg) {
     return;
   }
 
-  // Phase 1 deprecation: do not attempt to trigger legacy Hashi exports over HTTP.
   // If a snapshot file already exists, use it; otherwise, instruct users to enable the built-in exporter.
   if (statsPath && fs.existsSync(statsPath)) return;
   if (!requireFresh) return;
@@ -370,15 +392,15 @@ async function configureAnkiSnapshotWizard(base) {
   console.log("");
   console.log("=== Anki Snapshot Setup (recommended) ===");
   console.log("");
-  console.log("This config replaces the Hashi add-on by exporting the same files from your Anki profile.");
+  console.log("This config exports Anki snapshot files directly from your Anki profile.");
   console.log("");
 
   const enable = await askYesNoDefault("Set up built-in Anki snapshot export now? (Y/n) ", true);
   if (!enable) {
-    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] };
+    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR, rules: [] };
     base.anki_snapshot.enabled = false;
     console.log("");
-    console.log("Skipping Anki snapshot setup. Tokei will use the Hashi add-on if it is installed and reachable.");
+    console.log("Skipping Anki snapshot setup. Tokei will use an existing snapshot file on disk if one is present.");
     return base;
   }
 
@@ -398,10 +420,10 @@ async function configureAnkiSnapshotWizard(base) {
   if (!payload || payload.ok !== true) {
     const msg = payload?.error ? String(payload.error) : (r.stderr || "").trim() || "unknown error";
     console.warn("Could not discover Anki decks/note types:", msg);
-    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] };
+    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR, rules: [] };
     base.anki_snapshot.enabled = false;
     console.log("");
-    console.log("Tokei will fall back to the Hashi add-on for Anki stats if available.");
+    console.log("Tokei will fall back to the most recent Anki snapshot file on disk if available.");
     console.log("If you want to use built-in snapshots, rerun setup when Anki is idle/unlocked or try again later.");
     return base;
   }
@@ -412,7 +434,7 @@ async function configureAnkiSnapshotWizard(base) {
 
   if (!decks.length) {
     console.warn("No decks found in the selected Anki profile.");
-    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: "hashi_exports", rules: [] };
+    base.anki_snapshot = base.anki_snapshot || { enabled: false, stats_range_days: null, output_dir: DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR, rules: [] };
     base.anki_snapshot.enabled = false;
     return base;
   }
@@ -509,8 +531,8 @@ async function configureAnkiSnapshotWizard(base) {
   base.anki_snapshot.enabled = rules.length > 0;
   base.anki_snapshot.output_dir =
     typeof base.anki_snapshot.output_dir === "string" && base.anki_snapshot.output_dir.trim()
-      ? base.anki_snapshot.output_dir.trim()
-      : "hashi_exports";
+      ? normalizeAnkiSnapshotOutputDir(base.anki_snapshot.output_dir)
+      : DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR;
   base.anki_snapshot.stats_range_days =
     typeof base.anki_snapshot.stats_range_days === "number" ? base.anki_snapshot.stats_range_days : null;
   base.anki_snapshot.rules = rules;
@@ -611,7 +633,7 @@ async function ensureConfigOrSetup() {
     anki_snapshot: {
       enabled: false,
       stats_range_days: null,
-      output_dir: "hashi_exports",
+      output_dir: DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR,
       rules: [],
     },
   };
@@ -822,7 +844,7 @@ async function main() {
   }
 
   if (!noSync) {
-    await refreshHashiExport(cfg);
+    await refreshAnkiSnapshot(cfg);
   }
 
   const syncScript = path.join(__dirname, "tools", "tokei_sync.py");
