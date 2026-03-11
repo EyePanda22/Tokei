@@ -4,13 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
+## 0.9.0 - 2026-03-11
+
+### Changed
+- Anki snapshot migration: renamed the default snapshot output folder from `hashi_exports` to `anki_snapshot`.
+- Config/UI: configs that still use the legacy `hashi_exports` output dir are now normalized to `anki_snapshot`.
+- Compatibility: when legacy snapshot files exist only under `hashi_exports`, Tokei now copies forward `anki_stats_snapshot.json` and `known_words.sqlite` into `anki_snapshot` as needed.
+- Pipeline (CLI + Electron UI): removed the remaining runtime dependency on the Hashi add-on config for resolving Anki snapshot paths.
+- UI/Docs: updated Anki snapshot wording to reflect the built-in exporter and the new `anki_snapshot` default folder.
+
 ## 0.8.4 - 2026-03-08
 
 ### Changed
 - GSM live sessions plugin template: updated the local GSM API endpoint from `http://localhost:55000/api/today-stats` to `http://localhost:7275/api/today-stats`.
 - Docs: updated GSM live sessions setup notes to reflect the new `7275` port.
-- Anki snapshot migration: renamed the default snapshot output folder from `hashi_exports` to `anki_snapshot`, with compatibility copying from the legacy folder when needed.
-- Pipeline/UI: removed remaining runtime dependency on the Hashi add-on config and updated Anki snapshot wording accordingly.
 
 ## 0.8.3 - 2026-02-17
 
