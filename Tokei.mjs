@@ -16,7 +16,7 @@ const DEFAULT_THEME = "dark-graphite";
 const DEFAULT_ANKI_SNAPSHOT_OUTPUT_DIR = "anki_snapshot";
 const LEGACY_ANKI_SNAPSHOT_OUTPUT_DIR = "hashi_exports";
 const SNAPSHOT_MIGRATION_FILES = ["anki_stats_snapshot.json", "known_words.sqlite"];
-const APP_VERSION = "0.9.1 (alpha)";
+const APP_VERSION = "0.9.2 (alpha)";
 
 function initRuntimeLogPath() {
   try {

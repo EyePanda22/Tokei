@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning when possible.
 
-## 0.9.0 - 2026-03-11
+## 0.9.2 - 2026-03-11
 
 ### Changed
 - Anki snapshot migration: renamed the default snapshot output folder from `hashi_exports` to `anki_snapshot`.
@@ -12,6 +12,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Compatibility: when legacy snapshot files exist only under `hashi_exports`, Tokei now copies forward `anki_stats_snapshot.json` and `known_words.sqlite` into `anki_snapshot` as needed.
 - Pipeline (CLI + Electron UI): removed the remaining runtime dependency on the Hashi add-on config for resolving Anki snapshot paths.
 - UI/Docs: updated Anki snapshot wording to reflect the built-in exporter and the new `anki_snapshot` default folder.
+
+### Fixed
+- GSM reconciliation warnings are now emitted once per distinct day/total mismatch instead of repeating in every later report. If the live or GSM database total changes, Tokei reports the new mismatch.
+- Overwriting a report now removes its stale `WARNINGS.txt` sidecar when that report no longer has warnings.
 
 ## 0.8.4 - 2026-03-08
 

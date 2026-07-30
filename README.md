@@ -1,5 +1,7 @@
 ﻿**Pre-1.0 release**
 
+**Current version: 0.9.2 (alpha)**
+
 Tokei is under active development (pre-1.0). This README includes both quick-start instructions for regular users and advanced setup details for power users to ensure HTML **and PNG** reports work reliably.
 
 Note: Tokei runs as a console app (CLI), and also includes a setup-first UI (web + Electron wrapper).
@@ -146,6 +148,7 @@ Tokei reads from these external tools but does not modify them:
 - GSM (Game Sentence Miner)
   - Reads gsm.db (auto path uses %APPDATA%\GameSentenceMiner\gsm.db)
   - If missing, Tokei warns and continues
+  - When cached live sessions exceed a GSM daily rollup, Tokei uses the live total and warns once for that distinct mismatch. A changed total produces a new warning.
 - Mokuro
   - Reads volume-data.json from the configured path
   - If missing, Tokei warns and continues
