@@ -935,6 +935,10 @@ async function main() {
     console.log("Warnings:");
     for (const w of warnings) console.log(" -", String(w));
     console.log(" ", warningsOutPath);
+  } else if (fs.existsSync(warningsOutPath)) {
+    // An overwritten report may have had a warning on an earlier run. Remove the
+    // now-stale sidecar so it continues to reflect this report's current state.
+    fs.unlinkSync(warningsOutPath);
   }
 }
 

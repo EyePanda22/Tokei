@@ -767,6 +767,17 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         )
         """
     )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS gsm_mismatch_warnings (
+          day TEXT NOT NULL,
+          live_chars INTEGER NOT NULL,
+          db_chars INTEGER NOT NULL,
+          first_reported_at TEXT NOT NULL,
+          PRIMARY KEY (day, live_chars, db_chars)
+        )
+        """
+    )
 
     # lightweight migration for older DBs
     cols = {row[1] for row in con.execute("PRAGMA table_info(snapshots)").fetchall()}
@@ -1305,6 +1316,47 @@ def _read_gsm_live_daily_totals(
         return None
 
 
+def _claim_gsm_mismatch_warning(
+    con: sqlite3.Connection,
+    *,
+    day: date,
+    live_chars: int,
+    db_chars: int,
+    reported_at: datetime,
+) -> bool:
+    """Return whether this distinct GSM mismatch should be reported now.
+
+    Existing report snapshots are treated as already-reported history so adding this
+    feature does not re-emit a mismatch that was reported by an earlier version.
+    """
+    message = (
+        f"GSM live sessions exceed gsm.db rollup for {day.isoformat()}: "
+        f"live={live_chars}, db={db_chars}. Using live sessions for that day."
+    )
+    existing_report = con.execute(
+        "SELECT 1 FROM snapshots WHERE warnings_json LIKE ? LIMIT 1",
+        (f"%{message}%",),
+    ).fetchone()
+    if existing_report:
+        con.execute(
+            """
+            INSERT OR IGNORE INTO gsm_mismatch_warnings(day, live_chars, db_chars, first_reported_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (day.isoformat(), int(live_chars), int(db_chars), reported_at.isoformat()),
+        )
+        return False
+
+    cur = con.execute(
+        """
+        INSERT OR IGNORE INTO gsm_mismatch_warnings(day, live_chars, db_chars, first_reported_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (day.isoformat(), int(live_chars), int(db_chars), reported_at.isoformat()),
+    )
+    return cur.rowcount == 1
+
+
 def _read_gsm_chars(
     cfg: Config,
     *,
@@ -1312,6 +1364,8 @@ def _read_gsm_chars(
     today: date,
     tz: Any,
     warnings: list[str] | None = None,
+    warning_state_con: sqlite3.Connection | None = None,
+    reported_at: datetime | None = None,
 ) -> int:
     db_path = _resolve_gsm_db_path(cfg, warnings=warnings)
     if db_path is None:
@@ -1345,12 +1399,27 @@ def _read_gsm_chars(
                 diffs = [d for d in days if db_totals[d] > 0 and live_totals[d] > db_totals[d]]
                 if diffs:
                     diffs.sort(reverse=True)
-                    for d in diffs[:3]:
+                    reportable_diffs = diffs
+                    if warning_state_con is not None and reported_at is not None:
+                        reportable_diffs = [
+                            d
+                            for d in diffs
+                            if _claim_gsm_mismatch_warning(
+                                warning_state_con,
+                                day=d,
+                                live_chars=live_totals[d],
+                                db_chars=db_totals[d],
+                                reported_at=reported_at,
+                            )
+                        ]
+                    for d in reportable_diffs[:3]:
                         warnings.append(
                             f"GSM live sessions exceed gsm.db rollup for {d.isoformat()}: live={live_totals[d]}, db={db_totals[d]}. Using live sessions for that day."
                         )
-                    if len(diffs) > 3:
-                        warnings.append(f"GSM live sessions exceed gsm.db rollup for {len(diffs) - 3} more day(s).")
+                    if len(reportable_diffs) > 3:
+                        warnings.append(
+                            f"GSM live sessions exceed gsm.db rollup for {len(reportable_diffs) - 3} more day(s)."
+                        )
 
             db_window = sum(db_totals.values())
             merged_window = sum(max(db_totals[d], live_totals[d]) for d in days)
@@ -1805,7 +1874,17 @@ def main(argv: list[str]) -> int:
             manga_chars_total = _read_mokuro_manga_chars(cfg, warnings=warnings) if cfg.mokuro_enabled else 0
             ttsu_chars_total = _read_ttsu_chars(cfg, warnings=warnings) if cfg.ttsu_enabled else 0
             gsm_chars_total = (
-                _read_gsm_chars(cfg, root=root, today=today, tz=tz, warnings=warnings) if cfg.gsm_enabled else 0
+                _read_gsm_chars(
+                    cfg,
+                    root=root,
+                    today=today,
+                    tz=tz,
+                    warnings=warnings,
+                    warning_state_con=con,
+                    reported_at=now,
+                )
+                if cfg.gsm_enabled
+                else 0
             )
             anki_total, anki_reviews, anki_true_retention = _read_anki_snapshot_stats(cfg, warnings=warnings)
 
